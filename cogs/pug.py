@@ -745,14 +745,14 @@ class AssaultPug(PugTeams):
         return fmt.format(self, len(self))
 
     def format_pug(self, number=True, mention=False):
-        fmt = '**__{0.desc} [{1}/{0.maxPlayers}]:__**\n{2}'
-        return fmt.format(self, len(self), self.format_all_players(number=number, mention=mention))
+        fmt = '**__{0.desc} [{1}/{0.maxPlayers}] || {2} maps:__**\n{3}'
+        return fmt.format(self, len(self), self.maps.maxMaps, self.format_all_players(number=number, mention=mention))
 
     @property
     def format_match_is_ready(self):
         fmt = ['Match is ready:']
         fmt.append(self.format_teams(mention=True))
-        fmt.append('Maps:\n{}'.format(self.maps.format_current_maplist))
+        fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
         fmt.append(self.gameServer.format_game_server)
         fmt.append(self.gameServer.format_spectator_password)
         return '\n'.join(fmt)
@@ -761,7 +761,7 @@ class AssaultPug(PugTeams):
     def format_match_in_progress(self):
         fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted))]
         fmt.append(self.format_teams(mention=False))
-        fmt.append('Maps:\n{}'.format(self.maps.format_current_maplist))
+        fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
         fmt.append(self.gameServer.format_game_server)
         fmt.append(self.gameServer.format_spectate_password)
         return '\n'.join(fmt)

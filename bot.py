@@ -10,7 +10,7 @@ description = 'Discord Assault PUG Bot'
 extensions = ['cogs.info', 'cogs.pug']
 
 discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.DEBUG)
+discord_logger.setLevel(logging.CRITICAL)
 log = logging.getLogger()
 log.setLevel(logging.INFO)
 handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
@@ -18,7 +18,7 @@ log.addHandler(handler)
 
 help_attrs = dict(hidden=True)
 bot = commands.Bot(
-        command_prefix=['.'],
+        command_prefix=['!'],
         description=description,
         pm_help=None,
         help_attrs=help_attrs)
