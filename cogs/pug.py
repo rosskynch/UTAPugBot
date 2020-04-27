@@ -108,7 +108,7 @@ def getDuration(then, now = datetime.now(), interval = "default"):
     duration = now - then
     duration_in_s = duration.total_seconds()
 
-    def years():                    return divmod(duration_in_s, 31536000) # Seconds in a year=31536000.
+    def years():                    return divmod(duration_in_s, 31536000) # Seconds in a year = 31536000.
     def days(seconds = None):       return divmod(seconds if seconds != None else duration_in_s, 86400) # Seconds in a day = 86400
     def hours(seconds = None):      return divmod(seconds if seconds != None else duration_in_s, 3600) # Seconds in an hour = 3600
     def minutes(seconds = None):    return divmod(seconds if seconds != None else duration_in_s, 60) # Seconds in a minute = 60
@@ -120,11 +120,11 @@ def getDuration(then, now = datetime.now(), interval = "default"):
         m = minutes(h[1])
         s = seconds(m[1])
         msg = []
-        if y: msg.append('{} years'.format(int(y[0])))
-        if d: msg.append('{} days'.format(int(d[0])))
-        if h: msg.append('{} hours'.format(int(h[0])))
-        if m: msg.append('{} minutes'.format(int(m[0])))
-        if s: msg.append('{} seconds'.format(int(s[0])))
+        if y[0] > 0: msg.append('{} years'.format(int(y[0])))
+        if d[0] > 0: msg.append('{} days'.format(int(d[0])))
+        if h[0] > 0: msg.append('{} hours'.format(int(h[0])))
+        if m[0] > 0: msg.append('{} minutes'.format(int(m[0])))
+        msg.append('{} seconds'.format(int(s[0])))
         return ', '.join(msg)
     return {'years': int(years()[0]),'days': int(days()[0]),'hours': int(hours()[0]),'minutes': int(minutes()[0]),'seconds': int(seconds()),'default': totalDuration()}[interval]
 
@@ -763,7 +763,7 @@ class AssaultPug(PugTeams):
         fmt.append(self.format_teams(mention=False))
         fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
         fmt.append(self.gameServer.format_game_server)
-        fmt.append(self.gameServer.format_spectate_password)
+        fmt.append(self.gameServer.format_spectator_password)
         return '\n'.join(fmt)
 
     @property
@@ -885,12 +885,12 @@ class PUG(commands.Cog):
             if not self.pugInfo.gameServer.updateServerStatus():
                 print('Cannot contact game server.\n')
             if self.pugInfo.gameServer.processMatchFinished():
-                await self.bot.send(self.activeChannel, 'Match finished. Resetting pug...')
+                await self.activeChannel.send('Match finished. Resetting pug...')
                 if self.pugInfo.resetPug():
-                    await self.bot.send(self.activeChannel, self.pugInfo.format_pug)
+                    await self.activeChannel.send(self.pugInfo.format_pug)
                     print('Match over.')
                     return
-                await self.bot.send(self.activeChannel, 'Reset failed.')
+                await self.activeChannel.send('Reset failed.')
                 print('Reset failed')
 
     @updateGameServer.before_loop
