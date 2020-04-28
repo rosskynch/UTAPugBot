@@ -887,7 +887,7 @@ class PUG(commands.Cog):
             if self.pugInfo.gameServer.processMatchFinished():
                 await self.activeChannel.send('Match finished. Resetting pug...')
                 if self.pugInfo.resetPug():
-                    await self.activeChannel.send(self.pugInfo.format_pug)
+                    await self.activeChannel.send(self.pugInfo.format_pug())
                     print('Match over.')
                     return
                 await self.activeChannel.send('Reset failed.')
