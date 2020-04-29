@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 
 
 #########################################################################################
-# Main pug cog class.
+# Admin cog class.
 #########################################################################################
 class Admin(commands.Cog):
     """Admin-only commands that make the bot dynamic."""
