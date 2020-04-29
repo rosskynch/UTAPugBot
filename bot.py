@@ -7,7 +7,7 @@ import traceback
 
 description = 'Discord Assault PUG Bot'
 
-extensions = ['cogs.info', 'cogs.pug']
+extensions = ['cogs.admin', 'cogs.info', 'cogs.pug']
 
 discord_logger = logging.getLogger('discord')
 discord_logger.setLevel(logging.CRITICAL)
@@ -23,18 +23,15 @@ bot = commands.Bot(
         pm_help=None,
         help_attrs=help_attrs)
 
-
 @bot.event
 async def on_ready():
     print('Logged in as:')
     print('Username: ' + bot.user.name)
     print('ID: ' + str(bot.user.id))
 
-
 @bot.event
 async def on_resumed():
     print('resumed...')
-
 
 @bot.event
 async def on_command(context):
@@ -48,7 +45,6 @@ async def on_command(context):
     log.info('{0.created_at}: {0.author.name} in {1}: {0.content}'.format(
         message, destination))
 
-
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.NoPrivateMessage):
@@ -60,18 +56,15 @@ async def on_command_error(ctx, error):
         traceback.print_tb(error.original.__traceback__)
         print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
 
-
 @bot.event
 async def on_message(message):
     if not message.author.bot:
         await bot.process_commands(message)
 
-
 @bot.event
 async def on_message_edit(_, message):
     if not message.author.bot:
         await bot.process_commands(message)
-
 
 def load_credentials():
     with open('credentials.json') as f:
