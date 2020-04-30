@@ -664,6 +664,11 @@ class AssaultPug(PugTeams):
         self.lastPugTimeStarted = None
         self.pugLocked = False
 
+        # Bit of a hack to get around the problem of a match being in progress when this is initialised.
+        # Will improve this later.
+        if self.gameServer.lastSetupResult == 'Match In Progress':
+            self.pugLocked = True
+
     #########################################################################################
     # Properties:
     #########################################################################################
@@ -759,12 +764,19 @@ class AssaultPug(PugTeams):
 
     @property
     def format_match_in_progress(self):
-        fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
-        fmt.append(self.format_teams(mention=False))
-        fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
-        fmt.append(self.gameServer.format_game_server)
-        fmt.append(self.gameServer.format_spectator_password)
-        return '\n'.join(fmt)
+        if self.pugLocked:
+            if not self.matchReady:
+                # Handles the case when the bot has been restarted so doesn't have previous info.
+                # Could improve this in future by caching the state to disk when shutting down and loading back in on restart.
+                return 'Match is in progress, but do not have previous pug info. Please use !serverstatus to monitor this match'
+
+            fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
+            fmt.append(self.format_teams(mention=False))
+            fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
+            fmt.append(self.gameServer.format_game_server)
+            fmt.append(self.gameServer.format_spectator_password)
+            return '\n'.join(fmt)
+        return None
 
     @property
     def format_last_pug(self):
