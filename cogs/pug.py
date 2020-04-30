@@ -24,8 +24,8 @@ import discord
 
 DEFAULT_PLAYERS = 12
 DEFAULT_MAPS = 7
-DEFAULT_PICKMODETEAMS = 2
-DEFAULT_PICKMODEMAPS = 2
+DEFAULT_PICKMODETEAMS = 1 # Fairer for even numbers (players should be even, 1st pick gets 1, 2nd pick gets 2)
+DEFAULT_PICKMODEMAPS = 3 # Fairer for odd numbers (maps are usually odd, so 2nd pick should get more picks)
 
 DEFAULT_GAME_SERVER_IP = '0.0.0.0'
 DEFAULT_GAME_SERVER_PORT = '7777'
@@ -81,8 +81,8 @@ MAX_MAPS_LIMIT = len(MAP_LIST)
 PICKMODES = [
         [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
         [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0],
-        [0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        [0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0]]
+        [0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+        [0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]]
 MAX_PLAYERS_LIMIT = len(PICKMODES[0]) + 2
 
 PLASEP = '\N{SMALL ORANGE DIAMOND}'
@@ -103,7 +103,7 @@ def discord_md_escape(value):
 def display_name(member):
     return discord_md_escape(member.display_name)
 
-def getDuration(then, now = datetime.now(), interval = "default"):
+def getDuration(then, now, interval = "default"):
     # Adapted from https://stackoverflow.com/a/47207182
     duration = now - then
     duration_in_s = duration.total_seconds()
@@ -759,7 +759,7 @@ class AssaultPug(PugTeams):
 
     @property
     def format_match_in_progress(self):
-        fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted))]
+        fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
         fmt.append(self.format_teams(mention=False))
         fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
         fmt.append(self.gameServer.format_game_server)
@@ -770,7 +770,7 @@ class AssaultPug(PugTeams):
     def format_last_pug(self):
         fmt = []
         if self.lastPugTimeStarted:
-            fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted)))
+            fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted, datetime.now())))
             fmt.append(self.lastPugTeams)
             fmt.append('Maps:\n{}'.format(self.lastPugMaps))
         else:
@@ -1121,7 +1121,25 @@ class PUG(commands.Cog):
                 await ctx.send('Already added.')
                 return
 
-        await ctx.send(display_name(player) + ' added. ' + self.pugInfo.format_pug())
+        await ctx.send('{0} was added. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+        await self.processPugStatus(ctx)
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminadd(self, ctx, player: discord.Member):
+        "Adds a player to the pug. Admin only"
+        if not self.pugInfo.addPlayer(player):
+            if self.pugInfo.playersReady:
+                await ctx.send('Pug is already full.')
+                return
+            else:
+                await ctx.send('Already added.')
+                return
+        
+        await ctx.send('{0} was added by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
         await self.processPugStatus(ctx)
 
     @commands.command(aliases=['l'])
@@ -1132,7 +1150,23 @@ class PUG(commands.Cog):
         """Leaves the pug"""
         player = ctx.message.author
         if self.pugInfo.removePlayerFromPug(player):
-            await ctx.send(display_name(player) + ' left. ' + self.pugInfo.format_pug())
+            await ctx.send('{0} left. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminremove(self, ctx, player: discord.Member):
+        """Removes a player from the. Admin only"""
+        if self.pugInfo.removePlayerFromPug(player):
+            await ctx.send('{0} was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+
+    async def on_member_update(self, before, after):
+        """Remove member from pug if they go offline"""
+        if after.status is discord.Status.offline:
+            if self.pugInfo.removePlayerFromPug(before):
+                await self.activeChannel.send('{0} went offline. {1}'.format(display_name(player), self.pugInfo.format_pug()))                
 
     @commands.command()
     @commands.guild_only()
@@ -1209,8 +1243,9 @@ class PUG(commands.Cog):
     async def last(self, ctx):
         """Shows the last pug info"""
         if self.pugInfo.gameServer.matchInProgress:
-            msg = ['Last match not complete...\n' + self.format_match_in_progress(self.pugInfo)]
-            await ctx.send(msg)
+            msg = ['Last match not complete...']
+            msg.append(self.pugInfo.format_match_in_progress)
+            await ctx.send('\n'.join(msg))
         else:
             await ctx.send(self.pugInfo.format_last_pug)
 
