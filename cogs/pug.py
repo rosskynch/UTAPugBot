@@ -1166,7 +1166,7 @@ class PUG(commands.Cog):
         """Remove member from pug if they go offline"""
         if after.status is discord.Status.offline:
             if self.pugInfo.removePlayerFromPug(before):
-                await self.activeChannel.send('{0} went offline. {1}'.format(display_name(player), self.pugInfo.format_pug()))                
+                await self.activeChannel.send('{0} went offline. {1}'.format(display_name(before), self.pugInfo.format_pug()))
 
     @commands.command()
     @commands.guild_only()
