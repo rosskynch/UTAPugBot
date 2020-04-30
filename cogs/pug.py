@@ -1162,12 +1162,6 @@ class PUG(commands.Cog):
         if self.pugInfo.removePlayerFromPug(player):
             await ctx.send('{0} was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
 
-    async def on_member_update(self, before, after):
-        """Remove member from pug if they go offline"""
-        if after.status is discord.Status.offline:
-            if self.pugInfo.removePlayerFromPug(before):
-                await self.activeChannel.send('{0} went offline. {1}'.format(display_name(before), self.pugInfo.format_pug()))
-
     @commands.command()
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
