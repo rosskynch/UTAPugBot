@@ -1039,6 +1039,14 @@ class PUG(commands.Cog):
         else:
             await ctx.send(self.pugInfo.format_pug())
 
+    @commands.command(aliases = ['pugtime'])
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Ignore)
+    async def promote(self, ctx):
+        """Promotes the pug"""
+        await ctx.send('Hey @here it\'s PUG TIME!!!\n{} needed for AS!'.format(self.pugInfo.playersNeeded))
+
     @commands.command()
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
