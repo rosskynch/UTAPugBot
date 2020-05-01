@@ -1199,7 +1199,7 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
     async def adminremove(self, ctx, player: discord.Member):
-        """Removes a player from the. Admin only"""
+        """Removes a player from the pug. Admin only"""
         if self.pugInfo.removePlayerFromPug(player):
             await ctx.send('{0} was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
 
