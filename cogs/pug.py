@@ -128,6 +128,20 @@ def getDuration(then, now, interval = "default"):
         return ', '.join(msg)
     return {'years': int(years()[0]),'days': int(days()[0]),'hours': int(hours()[0]),'minutes': int(minutes()[0]),'seconds': int(seconds()),'default': totalDuration()}[interval]
 
+#########################################################################################
+# Custom Exceptions
+#########################################################################################
+class PugException(Exception):
+    """Base Class for Exceptions"""
+    pass
+
+class PugIsInProgress(PugException):
+    """Raised when a pug is in progress"""
+    pass
+
+#########################################################################################
+# Main Classes
+#########################################################################################
 class Players:
     """Maintains the state of a set of players"""
     def __init__(self, maxPlayers):
@@ -925,6 +939,19 @@ class PUG(commands.Cog):
     #########################################################################################
     # Functions:
     #########################################################################################
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        if error is PugIsInProgress:
+            # To handle messages returned when disabled commands are used when pug is already in progress.
+            msg = ['Match is currently in progress.']
+            if ctx.message.author in self.pugInfo:
+                msg.append('{},  please, join the match or find a sub.'.format(ctx.author.mention))
+                msg.append('If the match has just ended, please, wait at least 60 seconds for the pug to reset.')
+            else:
+                msg.append('Pug will reset when it is finished.')
+            await ctx.send('\n'.join(msg))
+
     def isActiveChannel(self, ctx):
         return self.activeChannel is not None and self.activeChannel == ctx.message.channel
 
@@ -1002,13 +1029,7 @@ class PUG(commands.Cog):
         if not self.isActiveChannel(ctx):
             return False
         if warn and self.pugInfo.pugLocked:
-            msg = ['Match is currently in progress.']
-            if ctx.message.author in self.pugInfo:
-                msg.append('{},  please, join the match or find a sub.'.format(ctx.author.mention))
-                msg.append('If the match has just ended, please, wait at least 60 seconds for the pug to reset.')
-            else:
-                msg.append('Pug will reset when it is finished.')
-            await ctx.send('\n'.join(msg))
+            raise PugIsInProgress("Pug In Progress")
         return not self.pugInfo.pugLocked
 
     #########################################################################################
