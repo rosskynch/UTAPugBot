@@ -129,17 +129,6 @@ def getDuration(then, now, interval = "default"):
     return {'years': int(years()[0]),'days': int(days()[0]),'hours': int(hours()[0]),'minutes': int(minutes()[0]),'seconds': int(seconds()),'default': totalDuration()}[interval]
 
 #########################################################################################
-# Custom Exceptions
-#########################################################################################
-class PugException(Exception):
-    """Base Class for Exceptions"""
-    pass
-
-class PugIsInProgress(PugException):
-    """Raised when a pug is in progress"""
-    pass
-
-#########################################################################################
 # Main Classes
 #########################################################################################
 class Players:
@@ -888,6 +877,13 @@ def isActiveChannel_Check(ctx): return ctx.bot.get_cog('PUG').isActiveChannel(ct
 def isPugInProgress_Warn(ctx): return ctx.bot.get_cog('PUG').isPugInProgress(ctx, warn=True)
 
 def isPugInProgress_Ignore(ctx): return ctx.bot.get_cog('PUG').isPugInProgress(ctx, warn=False)
+
+#########################################################################################
+# Custom Exceptions
+#########################################################################################
+class PugIsInProgress(commands.CommandError):
+    """Raised when a pug is in progress"""
+    pass
 
 #########################################################################################
 # Main pug cog class.
