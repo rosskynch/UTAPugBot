@@ -42,7 +42,7 @@ DEFAULT_RED_PASSWORD = RED_PASSWORD_PREFIX + '000'
 DEFAULT_BLUE_PASSWORD = BLUE_PASSWORD_PREFIX + '000'
 
 # TODO: Add option to read maplist from file. Bot will need a command too.
-MAP_LIST = [
+DEFAULT_MAP_LIST = [
     'AS-AsthenosphereSE',
     'AS-AutoRip',
     'AS-Ballistic',
@@ -76,7 +76,6 @@ MAP_LIST = [
     'AS-WorseThings_preview',
     'AS-GekokujouAL]['
 ]
-MAX_MAPS_LIMIT = len(MAP_LIST)
 
 PICKMODES = [
         [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
@@ -129,7 +128,7 @@ def getDuration(then, now, interval = "default"):
     return {'years': int(years()[0]),'days': int(days()[0]),'hours': int(hours()[0]),'minutes': int(minutes()[0]),'seconds': int(seconds()),'default': totalDuration()}[interval]
 
 #########################################################################################
-# Main Classes
+# CLASS
 #########################################################################################
 class Players:
     """Maintains the state of a set of players"""
@@ -197,13 +196,15 @@ class Players:
         while(len(self) > self.maxPlayers):
             self.players.pop()
 
-
+#########################################################################################
+# CLASS
+#########################################################################################
 class PugMaps:
     """Maintains the state of a set of maps for a pug"""
     def __init__(self, maxMaps, pickMode):
         self.maxMaps = maxMaps
         self.pickMode = pickMode
-        self.completeMaplist = MAP_LIST
+        self.availableMapsList = DEFAULT_MAP_LIST
         self.maps = []
 
     def __contains__(self, map):
@@ -235,6 +236,10 @@ class PugMaps:
     def currentTeamToPickMap(self):
         return PICKMODES[self.pickMode][len(self.maps)]
 
+    @property
+    def maxMapsLimit(self):
+        return len(self.availableMapsList)
+
     #########################################################################################
     # Formatted strings
     #########################################################################################
@@ -244,8 +249,8 @@ class PugMaps:
         return PLASEP.join(fmt.format(*x) for x in indexedMaps)
 
     @property
-    def format_complete_maplist(self):
-        return self.format_maplist(self.completeMaplist)
+    def format_available_maplist(self):
+        return self.format_maplist(self.availableMapsList)
 
     @property
     def format_current_maplist(self):
@@ -258,13 +263,41 @@ class PugMaps:
         indexedMaplist = ((i, m) for i, m in enumerate(maps, 1) if m)
         return indexedMaplist
 
-    def addMap(self, map):
-        if map not in self and not self.mapsFull:
+    def addMapToAvailableList(self, map: str):
+        # Can't really verify the map, but ignore blank/None inputs.
+        if map not in self.availableMapsList and map not in [None, '']:
+            self.availableMapsList.append(map)
+            return True
+        return False
+
+    def removeMapFromAvailableList(self, map: str):
+        # Can't really verify the map, but ignore blank/None inputs.
+        if map and map in self.availableMapsList:
+            self.availableMapsList.remove(map)
+            return True
+        return False
+
+    def getMapFromAvailableList(self, index: int):
+        if index < 0 or index >= len(self.availableMapsList):
+            return None
+        return self.availableMapsList[index]
+
+    def setMaxMaps(self, numMaps: int):
+        if numMaps > 0 and numMaps <= self.maxMapsLimit:
+            self.maxMaps = numMaps
+            return True
+        return False
+
+    def addMap(self, index: int):
+        if self.mapsFull:
+            return False
+        map = self.getMapFromAvailableList(index)
+        if map and map not in self:
             self.maps.append(map)
             return True
         return False
 
-    def removeMap(self, map):
+    def removeMap(self, map: str):
         if map in self:
             self.maps.remove(map)
             return True
@@ -273,13 +306,9 @@ class PugMaps:
     def resetMaps(self):
         self.maps = []
 
-    def setMaxMaps(self, numMaps):
-        if numMaps <= MAX_MAPS_LIMIT:
-            self.maxMaps = numMaps
-        else:
-            self.maxMaps = MAX_MAPS_LIMIT
-
-
+#########################################################################################
+# CLASS
+#########################################################################################
 class Team(list):
     """Represents a team of players with a captain"""
     def __init__(self):
@@ -294,7 +323,9 @@ class Team(list):
             return self[0]
         return None
 
-
+#########################################################################################
+# CLASS
+#########################################################################################
 class PugTeams(Players):
     """Represents players who can be divided into 2 teams who captains pick."""
     def __init__(self, maxPlayers, pickMode):
@@ -425,7 +456,9 @@ class PugTeams(Players):
                 self.teams[remaining[0]].extend(p for p in self.players if p)
             return True
 
-
+#########################################################################################
+# CLASS
+#########################################################################################
 class GameServer:
     def __init__(self, setupfile):
         # POST server and game server info:
@@ -657,6 +690,9 @@ class GameServer:
         if not self.matchInProgress and self.lastSetupResult == 'Match Finished':
             return self.endMatch()
 
+#########################################################################################
+# CLASS
+#########################################################################################
 class AssaultPug(PugTeams):
     """Represents a Pug of 2 teams (to be selected), a set of maps to be played and a server to play on."""
     def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps):
@@ -823,8 +859,7 @@ class AssaultPug(PugTeams):
 
     def removePlayerFromPug(self, player):
         if self.removePugTeamPlayer(player):
-            # Reset the maps too if maps have already been picked,
-            # removing a player will mean teams and maps must be re-picked.
+            # Reset the maps too. If maps have already been picked, removing a player will mean teams and maps must be re-picked.
             self.maps.resetMaps()
             return True
         else:
@@ -833,12 +868,7 @@ class AssaultPug(PugTeams):
     def pickMap(self, captain, index: int):
         if captain != self.currentCaptainToPickMap:
             return False
-
-        if index < 0 or index >= len(self.maps.completeMaplist):
-            return False
-
-        map = self.maps.completeMaplist[index]
-        return self.maps.addMap(map)
+        return self.maps.addMap(index)
 
     def setupPug(self):
         if not self.pugLocked and self.matchReady:
@@ -1033,7 +1063,7 @@ class PUG(commands.Cog):
         return not self.pugInfo.pugLocked
 
     #########################################################################################
-    # Bot commands.
+    # Bot Admin ONLY commands.
     #########################################################################################
     @commands.command()
     @commands.guild_only()
@@ -1049,6 +1079,55 @@ class PUG(commands.Cog):
         self.activeChannel = ctx.message.channel
         await ctx.send('PUG commands are enabled in {}'.format(self.activeChannel.mention))
 
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminadd(self, ctx, player: discord.Member):
+        "Adds a player to the pug. Admin only"
+        if not self.pugInfo.addPlayer(player):
+            if self.pugInfo.playersReady:
+                await ctx.send('Pug is already full.')
+                return
+            else:
+                await ctx.send('Already added.')
+                return
+        
+        await ctx.send('{0} was added by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+        await self.processPugStatus(ctx)
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminremove(self, ctx, player: discord.Member):
+        """Removes a player from the pug. Admin only"""
+        if self.pugInfo.removePlayerFromPug(player):
+            await ctx.send('**{0}** was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def adminaddmap(self, ctx, map: str):
+        """Adds a map to the available map list. Admin only"""
+        if self.pugInfo.maps.addMapToAvailableList(map):
+            await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
+        else:
+            await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def adminremovemap(self, ctx, map: str):
+        """Removes a map to from available map list. Admin only"""
+        if self.pugInfo.maps.removeMapFromAvailableList(map):
+            await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
+        else:
+            await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
+
+    #########################################################################################
+    # Bot commands.
+    #########################################################################################
     @commands.command()
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
@@ -1078,7 +1157,7 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Ignore)
     async def promote(self, ctx):
         """Promotes the pug"""
-        await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for {1}!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
+        await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for **{1}**!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
 
     @commands.command()
     @commands.guild_only()
@@ -1091,7 +1170,7 @@ class PUG(commands.Cog):
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def serverstatus(self, ctx):
-        """Displays Pug server info"""
+        """Displays Pug server current status"""
         await ctx.send(self.pugInfo.gameServer.format_game_server_status)
 
     @commands.command()
@@ -1115,12 +1194,11 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Warn)
     async def setmaps(self, ctx, limit: int):
         """Sets number of maps"""
-        if (limit > 0 and limit <= MAX_MAPS_LIMIT):
-            self.pugInfo.maps.setMaxMaps(limit)
+        if (self.pugInfo.maps.setMaxMaps(limit)):
             await ctx.send('Map limit set to ' + str(self.pugInfo.maps.maxMaps))
             await self.processPugStatus(ctx)
         else:
-            await ctx.send('Map limit unchanged. Map limit is ' + str(MAX_MAPS_LIMIT))
+            await ctx.send('Map limit unchanged. Map limit is {}'.format(self.pugInfo.maps.maxMapsLimit))
 
     @commands.command()
     @commands.guild_only()
@@ -1165,24 +1243,6 @@ class PUG(commands.Cog):
         await ctx.send('{0} was added. {1}'.format(display_name(player), self.pugInfo.format_pug()))
         await self.processPugStatus(ctx)
 
-    @commands.command()
-    @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
-    @commands.check(isActiveChannel_Check)
-    @commands.check(isPugInProgress_Warn)
-    async def adminadd(self, ctx, player: discord.Member):
-        "Adds a player to the pug. Admin only"
-        if not self.pugInfo.addPlayer(player):
-            if self.pugInfo.playersReady:
-                await ctx.send('Pug is already full.')
-                return
-            else:
-                await ctx.send('Already added.')
-                return
-        
-        await ctx.send('{0} was added by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
-        await self.processPugStatus(ctx)
-
     @commands.command(aliases=['l'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
@@ -1192,16 +1252,6 @@ class PUG(commands.Cog):
         player = ctx.message.author
         if self.pugInfo.removePlayerFromPug(player):
             await ctx.send('{0} left. {1}'.format(display_name(player), self.pugInfo.format_pug()))
-
-    @commands.command()
-    @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
-    @commands.check(isActiveChannel_Check)
-    @commands.check(isPugInProgress_Warn)
-    async def adminremove(self, ctx, player: discord.Member):
-        """Removes a player from the pug. Admin only"""
-        if self.pugInfo.removePlayerFromPug(player):
-            await ctx.send('{0} was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
 
     @commands.command()
     @commands.guild_only()
@@ -1245,7 +1295,7 @@ class PUG(commands.Cog):
     async def listmaps(self, ctx):
         """Returns the list of maps to pick from"""
         msg = ['Server map list is: ']
-        msg.append(self.pugInfo.maps.format_complete_maplist)
+        msg.append(self.pugInfo.maps.format_available_maplist)
         await ctx.send('\n'.join(msg))
 
     @commands.command(aliases=['m'])
@@ -1260,7 +1310,7 @@ class PUG(commands.Cog):
             return
 
         mapIndex = idx - 1 # offset as users see them 1-based index.
-        if mapIndex < 0 or mapIndex >= len(self.pugInfo.maps.completeMaplist):
+        if mapIndex < 0 or mapIndex >= len(self.pugInfo.maps.availableMapsList):
             await ctx.send('Pick a valid map. Use !map <map_number>. Use !listmaps to see the list of available maps.')
             return
 

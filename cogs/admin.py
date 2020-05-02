@@ -14,6 +14,7 @@ class Admin(commands.Cog):
     @commands.command(hidden=True, invoke_without_command=True)
     @commands.is_owner()
     async def shutdown(self, ctx):
+        print("Shutting down.")
         await ctx.send("Shutting down.")
         await ctx.bot.logout()
 
