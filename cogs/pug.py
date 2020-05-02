@@ -1012,7 +1012,7 @@ class PUG(commands.Cog):
         if self.pugInfo.captainsReady:
             # Need to pick players.
             msg = '\n'.join([
-                self.pugInfo.format_all_players(number=True),
+                self.pugInfo.format_players(number=True),
                 self.pugInfo.format_teams(),
                 self.format_pick_next_player(mention=True)])
             await ctx.send(msg)
