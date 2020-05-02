@@ -305,7 +305,7 @@ class PugTeams(Players):
         self.task = None # Not used, might need later.
 
     def __contains__(self, player):
-        return player in (self.players + self.red + self.blue)
+        return player in self.all
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -357,6 +357,10 @@ class PugTeams(Players):
     @property
     def blue(self):
         return self.teams[1]
+
+    @property
+    def all(self):
+        return list(filter(None, self.players + self.red + self.blue)) 
 
     #########################################################################################
     # Functions:
@@ -730,7 +734,7 @@ class AssaultPug(PugTeams):
         return PLASEP.join(fmt.format(*x) for x in numberedPlayers)
 
     def format_all_players(self, number=False, mention=False):
-        return self.format_players(self, number=number, mention=mention)
+        return self.format_players(self.all, number=number, mention=mention)
 
     def format_remaining_players(self, number=False, mention=False):
         return self.format_players(self.players, number=number, mention=mention)
