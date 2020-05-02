@@ -924,13 +924,13 @@ class PUG(commands.Cog):
     # Formatted strings:
     #########################################################################################
 
-    def format_pick_next_player(self, mention=False):
+    def format_pick_next_player(self, ctx, mention=False):
         player = self.pugInfo.currentCaptainToPickPlayer
-        return '{} to pick next player (**{self.bot.command_prefix}pick <number>**)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next player (**{ctx.prefix}pick <number>**)'.format(player.mention if mention else display_name(player))
 
-    def format_pick_next_map(self, mention=False):
+    def format_pick_next_map(self, ctx, mention=False):
         player = self.pugInfo.currentCaptainToPickMap
-        return '{} to pick next map (use **{self.bot.command_prefix}map <number>** to pick and **{self.bot.command_prefix}listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next map (use **{ctx.prefix}map <number>** to pick and **{ctx.prefix}listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
 
     #########################################################################################
     # Functions:
@@ -972,7 +972,7 @@ class PUG(commands.Cog):
 
         if self.pugInfo.teamsReady:
             # Need to pick maps.
-            await ctx.send(self.format_pick_next_map(mention=True))
+            await ctx.send(self.format_pick_next_map(ctx, mention=True))
             return
         
         if self.pugInfo.captainsReady:
@@ -980,7 +980,7 @@ class PUG(commands.Cog):
             msg = '\n'.join([
                 self.pugInfo.format_all_players(number=True),
                 self.pugInfo.format_teams(),
-                self.format_pick_next_player(mention=True)])
+                self.format_pick_next_player(ctx, mention=True)])
             await ctx.send(msg)
             return
         
