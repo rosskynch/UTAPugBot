@@ -771,7 +771,7 @@ class AssaultPug(PugTeams):
             if not self.matchReady:
                 # Handles the case when the bot has been restarted so doesn't have previous info.
                 # Could improve this in future by caching the state to disk when shutting down and loading back in on restart.
-                return 'Match is in progress, but do not have previous pug info. Please use {self.bot.prefix}serverstatus to monitor this match'
+                return 'Match is in progress, but do not have previous pug info. Please use {self.bot.command_prefix}serverstatus to monitor this match'
 
             fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
             fmt.append(self.format_teams(mention=False))
@@ -926,11 +926,11 @@ class PUG(commands.Cog):
 
     def format_pick_next_player(self, mention=False):
         player = self.pugInfo.currentCaptainToPickPlayer
-        return '{} to pick next player (**{self.bot.prefix}pick <number>**)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next player (**{self.bot.command_prefix}pick <number>**)'.format(player.mention if mention else display_name(player))
 
     def format_pick_next_map(self, mention=False):
         player = self.pugInfo.currentCaptainToPickMap
-        return '{} to pick next map (use **{self.bot.prefix}map <number>** to pick and **{self.bot.prefix}listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next map (use **{self.bot.command_prefix}map <number>** to pick and **{self.bot.command_prefix}listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
 
     #########################################################################################
     # Functions:
