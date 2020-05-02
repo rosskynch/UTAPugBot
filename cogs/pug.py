@@ -771,7 +771,7 @@ class AssaultPug(PugTeams):
             if not self.matchReady:
                 # Handles the case when the bot has been restarted so doesn't have previous info.
                 # Could improve this in future by caching the state to disk when shutting down and loading back in on restart.
-                return 'Match is in progress, but do not have previous pug info. Please use !serverstatus to monitor this match'
+                return 'Match is in progress, but do not have previous pug info. Please use {self.bot.prefix}serverstatus to monitor this match'
 
             fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
             fmt.append(self.format_teams(mention=False))
@@ -926,11 +926,11 @@ class PUG(commands.Cog):
 
     def format_pick_next_player(self, mention=False):
         player = self.pugInfo.currentCaptainToPickPlayer
-        return '{} to pick next player (**.pick <number>**)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next player (**{self.bot.prefix}pick <number>**)'.format(player.mention if mention else display_name(player))
 
     def format_pick_next_map(self, mention=False):
         player = self.pugInfo.currentCaptainToPickMap
-        return '{} to pick next map (use **.map <number>** to pick and **.listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
+        return '{} to pick next map (use **{self.bot.prefix}map <number>** to pick and **{self.bot.prefix}listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
 
     #########################################################################################
     # Functions:
@@ -986,7 +986,7 @@ class PUG(commands.Cog):
         
         if self.pugInfo.numCaptains == 1:
             # Need second captain (blue is always second)
-            await ctx.send('Waiting for **Blue Team** captain. Type **.captain** to become Blue captain.')
+            await ctx.send('Waiting for **Blue Team** captain. Type **{ctx.prefix}captain** to become Blue captain.')
             return
 
         if self.pugInfo.playersReady:
@@ -1003,7 +1003,7 @@ class PUG(commands.Cog):
             # Standard case, moving to captain selection.
             msg.append(self.pugInfo.format_pug(mention=True))
             # Need first captain (red is always first)
-            msg.append('Type **.captain** to become Red captain.')
+            msg.append('Type **{ctx.prefix}captain** to become Red captain.')
             await ctx.send('\n'.join(msg))
             return
 
@@ -1074,7 +1074,7 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Ignore)
     async def promote(self, ctx):
         """Promotes the pug"""
-        await ctx.send('Hey @here it\'s PUG TIME!!!\n{} needed for AS!'.format(self.pugInfo.playersNeeded))
+        await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for {1}!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
 
     @commands.command()
     @commands.guild_only()
@@ -1257,7 +1257,7 @@ class PUG(commands.Cog):
 
         mapIndex = idx - 1 # offset as users see them 1-based index.
         if mapIndex < 0 or mapIndex >= len(self.pugInfo.maps.completeMaplist):
-            await ctx.send('Pick a valid map. Use .map <map_number>. Use .listmaps to see the list of available maps.')
+            await ctx.send('Pick a valid map. Use {ctx.prefix}map <map_number>. Use {ctx.prefix}listmaps to see the list of available maps.')
             return
 
         if not self.pugInfo.pickMap(captain, mapIndex):
