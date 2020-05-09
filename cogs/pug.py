@@ -689,6 +689,7 @@ class GameServer:
 
         if not self.matchInProgress and self.lastSetupResult == 'Match Finished':
             return self.endMatch()
+        return False
 
 #########################################################################################
 # CLASS
