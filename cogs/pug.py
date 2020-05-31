@@ -1280,7 +1280,7 @@ class PUG(commands.Cog):
         """Picks a player for a team in the pug"""
         captain = ctx.message.author
         # TODO: improve this, don't think we should use matchInProgress
-        if not self.pugInfo.captainsFull or not captain == self.pugInfo.currentCaptainToPickPlayer or self.pugInfo.pugLocked or self.pugInfo.gameServer.matchInProgress:
+        if self.pugInfo.teamsFull or not self.pugInfo.captainsFull or not captain == self.pugInfo.currentCaptainToPickPlayer or self.pugInfo.pugLocked or self.pugInfo.gameServer.matchInProgress:
             return
 
         picks = list(itertools.takewhile(functools.partial(self.pugInfo.pickPlayer, captain), (x - 1 for x in players)))
