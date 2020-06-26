@@ -70,13 +70,17 @@ DEFAULT_MAP_LIST = [
 ]
 
 # TODO: Add option to read server list from file. Bot will need a command too.
-DEFAULT_SERVER_LIST = {
-    "pugs1": "UTA Pug Server 1.uk",
-    "pugs2": "UTA Pug Server 2.uk",
-    "pugs3": "UTA Pug Server 3.fr",
-    "pugs4": "UTA Pug Server 4.fr",
-    "pugs5": "UTA Pug Server 5.nl"
-}
+#  List of Tuples, first element is the API reference, second element is the
+#  placeholder Name / Description of the server, which is updated after a
+#  successful check
+
+DEFAULT_SERVER_LIST = [
+    ("pugs1","UTA Pug Server 1.uk"),
+    ("pugs2", "UTA Pug Server 2.uk"),
+    ("pugs3", "UTA Pug Server 3.fr"),
+    ("pugs4", "UTA Pug Server 4.fr"),
+    ("pugs5", "UTA Pug Server 5.nl")
+]
 
 PICKMODES = [
         [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
@@ -533,7 +537,7 @@ class GameServer:
         fmt.update({"Mode": "endgame"})
         return fmt
 
-    def format_post_body_check(self):
+    def format_post_body_serverref(self):
         fmt = {
             "server": self.gameServerRef
         }
@@ -558,12 +562,21 @@ class GameServer:
         }
         return fmt
 
+    def current_serverrefs(self):
+        allServerRefs = []
+        for s in self.allServers:
+            allServerRefs.append(s[0])
+        return allServerRefs
+
     #########################################################################################
     # Formatted strings
     #########################################################################################
     @property
     def format_current_serveralias(self):
-        return '{0}'.format(self.allServers[self.gameServerRef])
+        serverName = self.allServers[self.current_serverrefs().index(self.gameServerRef)][1]
+        if self.gameServerIP not in [None, '', '0.0.0.0']:
+            serverName = self.gameServerName
+        return '{0}'.format(serverName)
 
     @property
     def format_gameServerURL(self):
@@ -627,15 +640,15 @@ class GameServer:
     # Functions:
     #########################################################################################
     def addServerToAvailableList(self, serverref: str, serverdesc: str):
-        if not self.allServers.has_key(serverref) and serverref not in [None, '']:
-            self.allServers[serverref] = serverdesc
+        if serverref not in self.current_serverrefs() and serverref not in [None, '']:
+            self.allServers.append((serverref,serverdesc))
             return True
         return False
 
-    def removeServerFromAvailableList(self, map: str):
+    def removeServerFromAvailableList(self, serverref: str):
         # Can't really verify the map, but ignore blank/None inputs.
-        if serverref in self.allServers.keys() and serverref not in [None, '']:
-            del self.allServers[serverref]
+        if serverref in self.current_serverrefs() and serverref not in [None, '']:
+            self.allServers.pop(self.current_serverrefs().index(serverref))
             return True
         return False
     
@@ -643,9 +656,9 @@ class GameServer:
 
     def useServer(self, index: int):
         """Sets the active server"""
-        if index >= 0 and index < len(array(sorted(self.allServers.keys()))):
-            self.gameServerRef = array(sorted(self.allServers.keys()))[index]
-            updateServerStatus()
+        if index >= 0 and index < len(self.allServers):
+            self.gameServerRef = self.allServers[index-1][0]
+            self.updateServerStatus()
             return True
         return False
 
@@ -659,7 +672,7 @@ class GameServer:
         if restrict and (datetime.now() - self.lastUpdateTime).total_seconds() < delay:
             # 5 second delay between requests when restricted.
             return None
-        body = self.format_post_body_check
+        body = self.format_post_body_serverref()
         r = requests.post(self.postServer, headers=self.format_post_header_check, json=body)
         self.lastUpdateTime = datetime.now()
         if(r):
@@ -711,8 +724,8 @@ class GameServer:
         # returns server back to public
         if not self.updateServerStatus():
             return False
-
-        r = requests.post(self.postServer, headers=self.format_post_header_endgame)
+        body = self.format_post_body_serverref()
+        r = requests.post(self.postServer, headers=self.format_post_header_endgame, json=body)
         if(r):
             info = r.json()
             self.lastSetupResult = info['setupResult']
@@ -1155,7 +1168,6 @@ class PUG(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def setactiveserver(self, ctx, svindex: int):
         """Overrides active server. Admin only"""
-        svindex -= 1
         if self.pugInfo.gameServer.useServer(svindex):
             await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
         else:
