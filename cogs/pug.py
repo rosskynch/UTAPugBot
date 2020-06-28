@@ -515,7 +515,7 @@ class GameServer:
             # Iterate through local cache of servers, and set the default if present
             if len(info['serverlist']):
                 for server in info['serverlist']:
-                    updateServerReference(server['serverref'],server['servername'])
+                    self.updateServerReference(server['serverref'],server['servername'])
                     if 'serverdefault' in server.keys():
                         self.gameServerRef = server['serverref']
 
@@ -594,6 +594,26 @@ class GameServer:
         if self.gameServerIP not in [None, '', '0.0.0.0']:
             serverName = self.gameServerName
         return '{0}'.format(serverName)
+    
+    @property
+    def format_showall_servers(self):
+        flags = {
+            'uk':':flag_gb:',
+            'fr':':flag_fr:',
+            'nl':':flag_nl:',
+            'de':':flag_de:',
+            'us':':flag_us:'
+        }
+        msg = []
+        i = 0
+        for s in self.allServers:
+            i += 1
+            servername = '{0}'.format(s[1])
+            for flag in flags:
+                servername  = re.compile(flag, re.IGNORECASE).sub(flags[flag],servername)
+                #servername = servername.replace(flag, flags[flag])
+            msg.append('{0}. {1} - {2}'.format(i,servername,s[2]))
+        return '\n'.join(msg)
 
     @property
     def format_gameServerURL(self):
@@ -662,15 +682,15 @@ class GameServer:
             return True
         return False
 
-    def updateServerReference(self, serverref: str, serverdesc: str):
+    def updateServerReference(self, serverref: str, serverdesc: str, serverurl: str = ''):
         if serverref in self.current_serverrefs() and serverref not in [None, '']:
             self.allServers.pop(self.current_serverrefs().index(serverref))
-        self.allServers.append((serverref,serverdesc))
+        self.allServers.append((serverref,serverdesc,serverurl))
         return True
     
     def useServer(self, index: int):
         """Sets the active server"""
-        if index >= 0 and index < len(self.allServers):
+        if index >= 0 and index <= len(self.allServers):
             self.gameServerRef = self.allServers[index-1][0]
             self.updateServerStatus()
             return True
@@ -706,12 +726,13 @@ class GameServer:
             if len(info):
                 # firstly, determine if the primary server is online and responding, then drop the local list
                 for svc in info:
-                    if svc['serverDefault'] == True and svc['serverStatus']['serverSummary'] not in [None,'','N/A','N/AN/A']:
+                    if svc['serverDefault'] == True and svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
                         # Default is present and working, re-iterate through list and populate local var
+                        # If for whatever reason the default server isn't working, then stick to local list for now.
                         self.allServers = []
                         for sv in info:
-                            if sv['serverstatus']['serverSummary'] not in [None,'','N/A','N/AN/A']:
-                                updateServerReference(sv['serverRef'],sv['serverName'])
+                            if sv['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
+                                self.updateServerReference(sv['serverRef'],sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'],sv['serverPort']))
                 return True
             else:
                 return True # query failed, fall back to local json config
@@ -807,7 +828,7 @@ class AssaultPug(PugTeams):
         self.name = 'ASPug'
         self.desc = 'Assault PUG'
         self.maps = PugMaps(numMaps, pickModeMaps)
-        self.servers = [GameServer(DEFAULT_CONFIG)]
+        self.servers = [GameServer(DEFAULT_CONFIG_FILE)]
         self.serverIndex = 0
         self.lastPugTeams = 'No previous pug.'
         self.lastPugMaps = None
@@ -1214,14 +1235,25 @@ class PUG(commands.Cog):
         if self.pugInfo.removePlayerFromPug(player):
             await ctx.send('**{0}** was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
 
-    @commands.command()
+    @commands.command(aliases=['setserver','setactiveserver'])
     @commands.has_permissions(manage_guild=True)
-    async def setactiveserver(self, ctx, svindex: int):
+    @commands.check(isPugInProgress_Warn)
+    async def adminsetserver(self, ctx, svindex: int):
         """Overrides active server. Admin only"""
         if self.pugInfo.gameServer.useServer(svindex):
             await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
         else:
-            await ctx.send('Server **{0}** could not activated.'.format(svindex))
+            await ctx.send('Server **{0}** could not be activated.'.format(svindex))
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isPugInProgress_Warn)
+    async def refreshservers(self, ctx):
+        """Adds a server to the available pool. Admin only"""
+        if self.pugInfo.gameServer.validateServers():
+            await ctx.send('Server list refreshed.')
+        else:
+            await ctx.send('Server list could not be refreshed.')
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
@@ -1292,6 +1324,12 @@ class PUG(commands.Cog):
     async def promote(self, ctx):
         """Promotes the pug"""
         await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for **{1}**!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
+
+    @commands.command(aliases = ['serverlist'])
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    async def listservers(self,ctx):
+        await ctx.send(self.pugInfo.gameServer.format_showall_servers)
 
     @commands.command()
     @commands.guild_only()

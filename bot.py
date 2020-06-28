@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 import traceback
-import os, ssl
+#import os, ssl
 
 description = 'Discord Assault PUG Bot'
 
@@ -13,7 +13,7 @@ extensions = ['cogs.admin', 'cogs.info', 'cogs.pug']
 discord_logger = logging.getLogger('discord')
 discord_logger.setLevel(logging.CRITICAL)
 log = logging.getLogger()
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
 log.addHandler(handler)
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if any('debug' in arg.lower() for arg in sys.argv):
         bot.command_prefix = '$'
 
-    ssl._create_default_https_context = ssl._create_unverified_context
+    #ssl._create_default_https_context = ssl._create_unverified_context
 
     credentials = load_credentials()
     for extension in extensions:
