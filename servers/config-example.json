@@ -1,0 +1,37 @@
+{
+  "setupapi": {
+    "postserver": "",
+    "authtoken": ""
+  },
+  "serverlist": [
+    {
+      "serverref": "pugs1",
+      "servername": "UTA Pug Server 1.uk"
+    }
+  ],
+  "maplist": [
+    "AS-AsthenosphereSE",
+    "AS-AutoRip",
+    "AS-Ballistic",
+    "AS-Bridge",
+    "AS-Desertstorm",
+    "AS-Desolate][",
+    "AS-Frigate",
+    "AS-GolgothaAL",
+    "AS-Golgotha][AL",
+    "AS-HiSpeed",
+    "AS-Mazon",
+    "AS-RiverbedSE",
+    "AS-Riverbed]l[AL",
+    "AS-Rook",
+    "AS-Siege][",
+    "AS-Submarinebase][",
+    "AS-SnowDunes][AL_beta",
+    "AS-TheDungeon]l[AL",
+    "AS-DustbowlALRev04",
+    "AS-TheScarabSE",
+    "AS-LavaFort][PV",
+    "AS-WaterFort_beta4",
+    "AS-BridgePV_beta5"
+  ]
+}
