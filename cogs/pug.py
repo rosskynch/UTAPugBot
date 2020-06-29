@@ -205,10 +205,10 @@ class Players:
 #########################################################################################
 class PugMaps:
     """Maintains the state of a set of maps for a pug"""
-    def __init__(self, maxMaps, pickMode):
+    def __init__(self, maxMaps, pickMode, mapList):
         self.maxMaps = maxMaps
         self.pickMode = pickMode
-        self.availableMapsList = DEFAULT_MAP_LIST
+        self.availableMapsList = mapList
         self.maps = []
 
     def __contains__(self, map):
@@ -466,6 +466,7 @@ class PugTeams(Players):
 class GameServer:
     def __init__(self, setupfile):
         # Initialise the class with hardcoded defaults, then parse in JSON config
+        self.configFile = setupfile
 
         # All servers
         self.allServers = DEFAULT_SERVER_LIST
@@ -511,14 +512,30 @@ class GameServer:
             self.postServer = info['setupapi']['postserver']
             self.authtoken = info['setupapi']['authtoken']
             if len(info['maplist']):
-                self.availableMapsList = info['maplist']
+                print('Loaded {0} maps from config.json'.format(len(info['maplist'])))
+                self.configMaps = info['maplist']
+
             # Iterate through local cache of servers, and set the default if present
             if len(info['serverlist']):
                 for server in info['serverlist']:
                     self.updateServerReference(server['serverref'],server['servername'])
                     if 'serverdefault' in server.keys():
                         self.gameServerRef = server['serverref']
-
+            f.close()
+            return True
+    # Update config (currently only maplist is being saved)
+    def savePugConfig(self, setupfile, maplist):
+        with open(setupfile) as f:
+            info = json.load(f)
+            if len(self.configMaps):
+                info['maplist'] = self.configMaps
+            if len(maplist):
+                info['maplist'] = maplist
+            f.close()
+        with open(setupfile,'w') as f:
+            json.dump(info,f, indent=4)
+            
+        return True
     #########################################################################################
     # Formatted JSON
     #########################################################################################
@@ -827,9 +844,10 @@ class AssaultPug(PugTeams):
         super().__init__(numPlayers, pickModeTeams)
         self.name = 'ASPug'
         self.desc = 'Assault PUG'
-        self.maps = PugMaps(numMaps, pickModeMaps)
         self.servers = [GameServer(DEFAULT_CONFIG_FILE)]
         self.serverIndex = 0
+        self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
+        
         self.lastPugTeams = 'No previous pug.'
         self.lastPugMaps = None
         self.lastPugTimeStarted = None
@@ -1257,16 +1275,8 @@ class PUG(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
-    async def adminaddserver(self, ctx, sv: str):
-        """Adds a server to the available pool. Admin only"""
-        if self.pugInfo.gameServer.updateServerReference(sv.split(' ',1)[0],sv.split(' ',1)[1]):
-            await ctx.send('Server {0} (API ref: {1}) was added to the available pool by an admin.'.format(sv.split(' ',1)[0],sv.split(' ',1)[1]))
-        else:
-            await ctx.send('Server could not be added. Is it already in the list?')
-
-    @commands.command()
-    @commands.has_permissions(manage_guild=True)
     async def adminremoveserver(self, ctx, svref: str):
+        # Removed add server in favour of pulling from API; left remove server in here in case one needs temporarily removing until restart
         """Removes a server from available pool. Admin only"""
         if self.pugInfo.gameServer.removeServerReference(svref):
             await ctx.send('Server was removed the available pool by an admin.')
@@ -1278,6 +1288,7 @@ class PUG(commands.Cog):
     async def adminaddmap(self, ctx, map: str):
         """Adds a map to the available map list. Admin only"""
         if self.pugInfo.maps.addMapToAvailableList(map):
+            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
@@ -1287,6 +1298,7 @@ class PUG(commands.Cog):
     async def adminremovemap(self, ctx, map: str):
         """Removes a map to from available map list. Admin only"""
         if self.pugInfo.maps.removeMapFromAvailableList(map):
+            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
