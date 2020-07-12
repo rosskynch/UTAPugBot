@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 import traceback
-#import os, ssl
 
 description = 'Discord Assault PUG Bot'
 
@@ -19,7 +18,7 @@ log.addHandler(handler)
 
 help_attrs = dict(hidden=True)
 bot = commands.Bot(
-        command_prefix=['?','^'],
+        command_prefix=['!','.'],
         description=description,
         pm_help=None,
         help_attrs=help_attrs)
@@ -74,8 +73,6 @@ def load_credentials():
 if __name__ == '__main__':
     if any('debug' in arg.lower() for arg in sys.argv):
         bot.command_prefix = '$'
-
-    #ssl._create_default_https_context = ssl._create_unverified_context
 
     credentials = load_credentials()
     for extension in extensions:

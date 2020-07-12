@@ -724,11 +724,10 @@ class GameServer:
             # 5 second delay between requests when restricted.
             return None
         
-        body = self.format_post_body_serverref()
-
         if allservers:
             r = requests.post(self.postServer, headers=self.format_post_header_list)
         else:
+            body = self.format_post_body_serverref()
             r = requests.post(self.postServer, headers=self.format_post_header_list, json=body)
 
         self.lastUpdateTime = datetime.now()
@@ -742,14 +741,19 @@ class GameServer:
             info = self.getServerList()
             if len(info):
                 # firstly, determine if the primary server is online and responding, then drop the local list
+                serverDefaultPresent = False
                 for svc in info:
                     if svc['serverDefault'] == True and svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
-                        # Default is present and working, re-iterate through list and populate local var
                         # If for whatever reason the default server isn't working, then stick to local list for now.
-                        self.allServers = []
-                        for sv in info:
-                            if sv['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
-                                self.updateServerReference(sv['serverRef'],sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'],sv['serverPort']))
+                        serverDefaultPresent = True
+                        break
+ 
+                if serverDefaultPresent:
+                    # Default is present and working, re-iterate through list and populate local var
+                    self.allServers = []
+                    for sv in info:
+                        if sv['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
+                            self.updateServerReference(sv['serverRef'],sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'],sv['serverPort']))
                 return True
             else:
                 return True # query failed, fall back to local json config
