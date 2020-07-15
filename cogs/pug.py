@@ -707,7 +707,7 @@ class GameServer:
     
     def useServer(self, index: int):
         """Sets the active server"""
-        if index >= 0 and index <= len(self.allServers):
+        if index >= 0 and index < len(self.allServers):
             self.gameServerRef = self.allServers[index][0]
             self.updateServerStatus()
             return True
@@ -1307,6 +1307,18 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
+    
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def passwords(self, ctx):
+        """Provides current game passwords to the requesting administrator. Admin only"""
+        if isPugInProgress:
+            
+            await ctx.author.send('For the game currently running at {0}'.format(self.pugInfo.gameServer.format_gameServerURL))
+            await ctx.author.send('{0} - {1}'.format(self.pugInfo.gameServer.format_red_password,self.pugInfo.gameServer.format_blue_password))
+            await ctx.send('Check your private messages!')
+        else:
+            await ctx.send('There is no game in progress.')
 
     #########################################################################################
     # Bot commands.
