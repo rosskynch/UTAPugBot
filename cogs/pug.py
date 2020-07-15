@@ -27,12 +27,13 @@ DEFAULT_MAPS = 7
 DEFAULT_PICKMODETEAMS = 1 # Fairer for even numbers (players should be even, 1st pick gets 1, 2nd pick gets 2)
 DEFAULT_PICKMODEMAPS = 3 # Fairer for odd numbers (maps are usually odd, so 2nd pick should get more picks)
 
+DEFAULT_GAME_SERVER_REF = 'pugs1'
 DEFAULT_GAME_SERVER_IP = '0.0.0.0'
 DEFAULT_GAME_SERVER_PORT = '7777'
 DEFAUlT_GAME_SERVER_NAME = 'Unknown Server'
 DEFAULT_POST_SERVER = 'https://www.utassault.net'
 DEFAULT_POST_TOKEN = 'NoToken'
-DEFAULT_SERVER_FILE = 'servers/default_server.json'
+DEFAULT_CONFIG_FILE = 'servers/config.json'
 
 RED_PASSWORD_PREFIX = 'RP'
 BLUE_PASSWORD_PREFIX = 'BP'
@@ -41,7 +42,10 @@ DEFAULT_NUM_SPECTATORS = 4
 DEFAULT_RED_PASSWORD = RED_PASSWORD_PREFIX + '000'
 DEFAULT_BLUE_PASSWORD = BLUE_PASSWORD_PREFIX + '000'
 
-# TODO: Add option to read maplist from file. Bot will need a command too.
+# Map list:
+#  List of League Assault default maps.
+#  This hardcoded list will be replaced through JSON config upon bot load
+
 DEFAULT_MAP_LIST = [
     'AS-AsthenosphereSE',
     'AS-AutoRip',
@@ -52,29 +56,29 @@ DEFAULT_MAP_LIST = [
     'AS-Frigate',
     'AS-GolgothaAL',
     'AS-Golgotha][AL',
+    'AS-Guardia',
+    'AS-GuardiaAL',
+    'AS-HiSpeed',
     'AS-Mazon',
+    'AS-OceanFloor',
+    'AS-OceanFloorAL',
+    'AS-Overlord',
     'AS-RiverbedSE',
     'AS-Riverbed]l[AL',
     'AS-Rook',
     'AS-Siege][',
     'AS-Submarinebase][',
-    'AS-SaqqaraPE_preview3',
-    'AS-SnowDunes][AL_beta',
-    'AS-LostTempleBetaV2',
     'AS-TheDungeon]l[AL',
-    'AS-DustbowlALRev04',
-    'AS-NavaroneAL',
-    'AS-TheScarabSE',
-    'AS-Vampire',
-    'AS-ColderSteelSE_beta3',
-    'AS-HiSpeed',
-    'AS-NaliColony_preview5',
-    'AS-LavaFort][PV',
-    'AS-BioassaultSE_preview2',
-    'AS-Razon_preview3',
-    'AS-Resurrection',
-    'AS-WorseThings_preview',
-    'AS-GekokujouAL]['
+]
+
+# Server list:
+#  List of Tuples, first element is the API reference, second element is the placeholder
+#  Name / Description of the server, which is updated after a successful check.
+#  This hardcoded list will be replaced through JSON config upon bot load, and subsequently
+#  verified against the online API.
+
+DEFAULT_SERVER_LIST = [
+    ("pugs1","UTA Pug Server 1.uk")
 ]
 
 PICKMODES = [
@@ -201,10 +205,10 @@ class Players:
 #########################################################################################
 class PugMaps:
     """Maintains the state of a set of maps for a pug"""
-    def __init__(self, maxMaps, pickMode):
+    def __init__(self, maxMaps, pickMode, mapList):
         self.maxMaps = maxMaps
         self.pickMode = pickMode
-        self.availableMapsList = DEFAULT_MAP_LIST
+        self.availableMapsList = mapList
         self.maps = []
 
     def __contains__(self, map):
@@ -461,12 +465,23 @@ class PugTeams(Players):
 #########################################################################################
 class GameServer:
     def __init__(self, setupfile):
+        # Initialise the class with hardcoded defaults, then parse in JSON config
+        self.configFile = setupfile
+        self.configMaps = []
+        # All servers
+        self.allServers = DEFAULT_SERVER_LIST
+        
         # POST server and game server info:
         self.postServer = DEFAULT_POST_SERVER
         self.authtoken = DEFAULT_POST_TOKEN
+
+        # Chosen game server deetails
+        self.gameServerRef = DEFAULT_GAME_SERVER_REF
         self.gameServerIP = DEFAULT_GAME_SERVER_IP
         self.gameServerPort = DEFAULT_GAME_SERVER_PORT
         self.gameServerName = DEFAUlT_GAME_SERVER_NAME
+        
+        # Setup details
         self.redPassword = DEFAULT_RED_PASSWORD
         self.bluePassword = DEFAULT_BLUE_PASSWORD
         self.spectatorPassword = DEFAULT_SPECTATOR_PASSWORD
@@ -486,15 +501,41 @@ class GameServer:
 
         self.lastUpdateTime = datetime.now()
 
-        self.loadPostServerInfo(setupfile)
+        self.loadPugConfig(setupfile)
+        self.validateServers()
         self.updateServerStatus()
 
-    def loadPostServerInfo(self, setupfile):
+    # Load configuration defaults (some of this will later be superceded by live API data)
+    def loadPugConfig(self, setupfile):
         with open(setupfile) as f:
             info = json.load(f)
-            self.postServer = info['postserver']
-            self.authtoken = info['authtoken']
+            self.postServer = info['setupapi']['postserver']
+            self.authtoken = info['setupapi']['authtoken']
+            if len(info['maplist']):
+                print('Loaded {0} maps from config.json'.format(len(info['maplist'])))
+                self.configMaps = info['maplist']
 
+            # Iterate through local cache of servers, and set the default if present
+            if len(info['serverlist']):
+                for server in info['serverlist']:
+                    self.updateServerReference(server['serverref'],server['servername'])
+                    if 'serverdefault' in server.keys():
+                        self.gameServerRef = server['serverref']
+            f.close()
+            return True
+    # Update config (currently only maplist is being saved)
+    def savePugConfig(self, setupfile, maplist):
+        with open(setupfile) as f:
+            info = json.load(f)
+            if len(self.configMaps):
+                info['maplist'] = self.configMaps
+            if len(maplist):
+                info['maplist'] = maplist
+            f.close()
+        with open(setupfile,'w') as f:
+            json.dump(info,f, indent=4)
+            
+        return True
     #########################################################################################
     # Formatted JSON
     #########################################################################################
@@ -511,7 +552,13 @@ class GameServer:
         fmt = self.format_post_header_auth
         fmt.update({"Mode": "check"})
         return fmt
-
+    
+    @property
+    def format_post_header_list(self):
+        fmt = self.format_post_header_auth
+        fmt.update({"Mode": "list"})
+        return fmt
+    
     @property
     def format_post_header_setup(self):
         fmt = self.format_post_header_auth
@@ -524,8 +571,15 @@ class GameServer:
         fmt.update({"Mode": "endgame"})
         return fmt
 
+    def format_post_body_serverref(self):
+        fmt = {
+            "server": self.gameServerRef
+        }
+        return fmt
+
     def format_post_body_setup(self, numPlayers, maps):
         fmt = {
+            "server": self.gameServerRef,
             "authEnabled": True,
             "tiwEnabled": True,
             "matchLength": len(maps),
@@ -542,9 +596,42 @@ class GameServer:
         }
         return fmt
 
+    def current_serverrefs(self):
+        allServerRefs = []
+        for s in self.allServers:
+            allServerRefs.append(s[0])
+        return allServerRefs
+
     #########################################################################################
     # Formatted strings
     #########################################################################################
+    @property
+    def format_current_serveralias(self):
+        serverName = self.allServers[self.current_serverrefs().index(self.gameServerRef)][1]
+        if self.gameServerIP not in [None, '', '0.0.0.0']:
+            serverName = self.gameServerName
+        return '{0}'.format(serverName)
+    
+    @property
+    def format_showall_servers(self):
+        flags = {
+            'uk':':flag_gb:',
+            'fr':':flag_fr:',
+            'nl':':flag_nl:',
+            'de':':flag_de:',
+            'us':':flag_us:'
+        }
+        msg = []
+        i = 0
+        for s in self.allServers:
+            i += 1
+            servername = '{0}'.format(s[1])
+            for flag in flags:
+                servername  = re.compile(flag, re.IGNORECASE).sub(flags[flag],servername)
+                #servername = servername.replace(flag, flags[flag])
+            msg.append('{0}. {1} - {2}'.format(i,servername,s[2]))
+        return '\n'.join(msg)
+
     @property
     def format_gameServerURL(self):
         return 'unreal://{0}:{1}'.format(self.gameServerIP, self.gameServerPort)
@@ -606,18 +693,79 @@ class GameServer:
     #########################################################################################
     # Functions:
     #########################################################################################
+    def removeServerReference(self, serverref: str):
+        if serverref in self.current_serverrefs() and serverref not in [None, '']:
+            self.allServers.pop(self.current_serverrefs().index(serverref))
+            return True
+        return False
+
+    def updateServerReference(self, serverref: str, serverdesc: str, serverurl: str = ''):
+        if serverref in self.current_serverrefs() and serverref not in [None, '']:
+            self.allServers.pop(self.current_serverrefs().index(serverref))
+        self.allServers.append((serverref,serverdesc,serverurl))
+        return True
+    
+    def useServer(self, index: int):
+        """Sets the active server"""
+        if index >= 0 and index < len(self.allServers):
+            self.gameServerRef = self.allServers[index][0]
+            self.updateServerStatus()
+            return True
+        return False
+
     def generatePasswords(self):
         """Generates random passwords for red and blue teams."""
         # Spectator password is not changed, think keeping it fixed is fine.
         self.redPassword = RED_PASSWORD_PREFIX + str(random.randint(0, 999))
         self.bluePassword = BLUE_PASSWORD_PREFIX + str(random.randint(0, 999))
 
-    def getServerStatus(self, restrict: bool = False, delay: int = 0):
+    def getServerList(self, restrict: bool = False, delay: int = 0, allservers: bool = True):
         if restrict and (datetime.now() - self.lastUpdateTime).total_seconds() < delay:
             # 5 second delay between requests when restricted.
             return None
         
-        r = requests.post(self.postServer, headers=self.format_post_header_check)
+        if allservers:
+            r = requests.post(self.postServer, headers=self.format_post_header_list)
+        else:
+            body = self.format_post_body_serverref()
+            r = requests.post(self.postServer, headers=self.format_post_header_list, json=body)
+
+        self.lastUpdateTime = datetime.now()
+        if(r):
+            return r.json()
+        else:
+            return None
+
+    def validateServers(self):
+        if len(self.allServers):
+            info = self.getServerList()
+            if len(info):
+                # firstly, determine if the primary server is online and responding, then drop the local list
+                serverDefaultPresent = False
+                for svc in info:
+                    if svc['serverDefault'] == True and svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
+                        # If for whatever reason the default server isn't working, then stick to local list for now.
+                        serverDefaultPresent = True
+                        break
+ 
+                if serverDefaultPresent:
+                    # Default is present and working, re-iterate through list and populate local var
+                    self.allServers = []
+                    for sv in info:
+                        if sv['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
+                            self.updateServerReference(sv['serverRef'],sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'],sv['serverPort']))
+                return True
+            else:
+                return True # query failed, fall back to local json config
+            return True
+        return False
+
+    def getServerStatus(self, restrict: bool = False, delay: int = 0):
+        if restrict and (datetime.now() - self.lastUpdateTime).total_seconds() < delay:
+            # 5 second delay between requests when restricted.
+            return None
+        body = self.format_post_body_serverref()
+        r = requests.post(self.postServer, headers=self.format_post_header_check, json=body)
         self.lastUpdateTime = datetime.now()
         if(r):
             return r.json()
@@ -668,8 +816,8 @@ class GameServer:
         # returns server back to public
         if not self.updateServerStatus():
             return False
-
-        r = requests.post(self.postServer, headers=self.format_post_header_endgame)
+        body = self.format_post_body_serverref()
+        r = requests.post(self.postServer, headers=self.format_post_header_endgame, json=body)
         if(r):
             info = r.json()
             self.lastSetupResult = info['setupResult']
@@ -700,9 +848,10 @@ class AssaultPug(PugTeams):
         super().__init__(numPlayers, pickModeTeams)
         self.name = 'ASPug'
         self.desc = 'Assault PUG'
-        self.maps = PugMaps(numMaps, pickModeMaps)
-        self.servers = [GameServer(DEFAULT_SERVER_FILE)]
+        self.servers = [GameServer(DEFAULT_CONFIG_FILE)]
         self.serverIndex = 0
+        self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
+        
         self.lastPugTeams = 'No previous pug.'
         self.lastPugMaps = None
         self.lastPugTimeStarted = None
@@ -1108,11 +1257,43 @@ class PUG(commands.Cog):
         if self.pugInfo.removePlayerFromPug(player):
             await ctx.send('**{0}** was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
 
+    @commands.command(aliases=['setserver','setactiveserver'])
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isPugInProgress_Warn)
+    async def adminsetserver(self, ctx, idx: int):
+        """Sets the active server to the index chosen from the pool of available servers. Admin only"""
+        svindex = idx - 1 # offset as users see them 1-based index.
+        if self.pugInfo.gameServer.useServer(svindex) and svindex >= 0:
+            await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
+        else:
+            await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    @commands.check(isPugInProgress_Warn)
+    async def refreshservers(self, ctx):
+        """Refreshes the server list within the available pool. Admin only"""
+        if self.pugInfo.gameServer.validateServers():
+            await ctx.send('Server list refreshed.')
+        else:
+            await ctx.send('Server list could not be refreshed.')
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def adminremoveserver(self, ctx, svref: str):
+        # Removed add server in favour of pulling from API; left remove server in here in case one needs temporarily removing until restart
+        """Removes a server from available pool. Admin only"""
+        if self.pugInfo.gameServer.removeServerReference(svref):
+            await ctx.send('Server was removed from the available pool by an admin.')
+        else:
+            await ctx.send('Server could not be removed. Is it even in the list?')
+
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def adminaddmap(self, ctx, map: str):
         """Adds a map to the available map list. Admin only"""
         if self.pugInfo.maps.addMapToAvailableList(map):
+            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
@@ -1122,9 +1303,22 @@ class PUG(commands.Cog):
     async def adminremovemap(self, ctx, map: str):
         """Removes a map to from available map list. Admin only"""
         if self.pugInfo.maps.removeMapFromAvailableList(map):
+            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
+    
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def passwords(self, ctx):
+        """Provides current game passwords to the requesting administrator. Admin only"""
+        if isPugInProgress:
+            
+            await ctx.author.send('For the game currently running at {0}'.format(self.pugInfo.gameServer.format_gameServerURL))
+            await ctx.author.send('{0} - {1}'.format(self.pugInfo.gameServer.format_red_password,self.pugInfo.gameServer.format_blue_password))
+            await ctx.send('Check your private messages!')
+        else:
+            await ctx.send('There is no game in progress.')
 
     #########################################################################################
     # Bot commands.
@@ -1159,6 +1353,12 @@ class PUG(commands.Cog):
     async def promote(self, ctx):
         """Promotes the pug"""
         await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for **{1}**!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
+
+    @commands.command(aliases = ['serverlist'])
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    async def listservers(self,ctx):
+        await ctx.send(self.pugInfo.gameServer.format_showall_servers)
 
     @commands.command()
     @commands.guild_only()
