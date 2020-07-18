@@ -1255,7 +1255,11 @@ class PUG(commands.Cog):
     async def adminremove(self, ctx, player: discord.Member):
         """Removes a player from the pug. Admin only"""
         if self.pugInfo.removePlayerFromPug(player):
-            await ctx.send('**{0}** was removed by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+            await ctx.send('**{0}** was removed by an admin.', format(display_name(player)))
+            await self.processPugStatus(ctx)
+        else:
+            await ctx.send('Something went wrong.')
+            await self.processPugStatus(ctx)
 
     @commands.command(aliases=['setserver','setactiveserver'])
     @commands.has_permissions(manage_guild=True)
@@ -1451,7 +1455,8 @@ class PUG(commands.Cog):
         """Leaves the pug"""
         player = ctx.message.author
         if self.pugInfo.removePlayerFromPug(player):
-            await ctx.send('{0} left. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+            await ctx.send('{0} left.'.format(display_name(player)))
+            await self.processPugStatus(ctx)
 
     @commands.command()
     @commands.guild_only()
