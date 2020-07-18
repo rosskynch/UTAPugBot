@@ -489,7 +489,7 @@ class GameServer:
 
         # We keep a track of the server's match status and also if we have used "endMatch" since the last server setup, which
         # can be used to override the updating matchInProgress when a match has been ended since the last server setup.
-        # This avoids  avoids the need to wait for the last map to complete before the server shows as match finished.
+        # This avoids the need to wait for the last map to complete before the server shows as match finished.
         self.matchInProgress = False
         self.endMatchPerformed = False
 
@@ -1267,8 +1267,13 @@ class PUG(commands.Cog):
     async def adminsetserver(self, ctx, idx: int):
         """Sets the active server to the index chosen from the pool of available servers. Admin only"""
         svindex = idx - 1 # offset as users see them 1-based index.
-        if self.pugInfo.gameServer.useServer(svindex) and svindex >= 0:
+        if self.pugInfo.gameServer.useServer(svindex):
             await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
+
+            # Bit of a hack to get around the problem of a match being in progress when this is initialised.
+            # Will improve this later.
+            if self.gameServer.lastSetupResult == 'Match In Progress':
+                self.pugLocked = True
         else:
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
 
