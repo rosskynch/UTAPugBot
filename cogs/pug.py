@@ -1126,7 +1126,7 @@ class PUG(commands.Cog):
             # To handle messages returned when disabled commands are used when pug is already in progress.
             msg = ['Match is currently in progress.']
             if ctx.message.author in self.pugInfo:
-                msg.append('{},  please, join the match or find a sub.'.format(ctx.author.mention))
+                msg.append('{},  please, join the match or find a sub.'.format(ctx.message.author.mention))
                 msg.append('If the match has just ended, please, wait at least 60 seconds for the pug to reset.')
             else:
                 msg.append('Pug will reset when it is finished.')
@@ -1312,10 +1312,9 @@ class PUG(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def passwords(self, ctx):
         """Provides current game passwords to the requesting administrator. Admin only"""
-        if isPugInProgress:
-            
-            await ctx.author.send('For the game currently running at {0}'.format(self.pugInfo.gameServer.format_gameServerURL))
-            await ctx.author.send('{0} - {1}'.format(self.pugInfo.gameServer.format_red_password,self.pugInfo.gameServer.format_blue_password))
+        if isPugInProgress:            
+            await ctx.message.author.send('For the game currently running at {0}'.format(self.pugInfo.gameServer.format_gameServerURL))
+            await ctx.message.author.send('{0} - {1}'.format(self.pugInfo.gameServer.format_red_password, self.pugInfo.gameServer.format_blue_password))
             await ctx.send('Check your private messages!')
         else:
             await ctx.send('There is no game in progress.')
