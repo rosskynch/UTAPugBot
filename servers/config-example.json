@@ -1,4 +1,7 @@
 {
+  "admin": {
+    "managerrole": "PugBotManager"
+  },
   "setupapi": {
     "postserver": "",
     "authtoken": ""
