@@ -2,6 +2,9 @@
   "admin": {
     "managerrole": "PugBotManager"
   },
+  "pug": {
+    "activechannelid": 0
+  },
   "setupapi": {
     "postserver": "",
     "authtoken": ""

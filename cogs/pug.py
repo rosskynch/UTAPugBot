@@ -6,8 +6,9 @@ import random
 import re
 import requests # should replace with aiohttp. See https://discordpy.readthedocs.io/en/latest/faq.html#what-does-blocking-mean
 import json
-from discord.ext import commands, tasks
 import discord
+from discord.ext import commands, tasks
+from cogs import admin
 
 # Commands and maps from the IRC bot:
 #
@@ -464,9 +465,9 @@ class PugTeams(Players):
 # CLASS
 #########################################################################################
 class GameServer:
-    def __init__(self, setupfile):
+    def __init__(self, configFile=DEFAULT_CONFIG_FILE):
         # Initialise the class with hardcoded defaults, then parse in JSON config
-        self.configFile = setupfile
+        self.configFile = configFile
         self.configMaps = []
         # All servers
         self.allServers = DEFAULT_SERVER_LIST
@@ -501,13 +502,13 @@ class GameServer:
 
         self.lastUpdateTime = datetime.now()
 
-        self.loadPugConfig(setupfile)
+        self.loadConfig(configFile)
         self.validateServers()
         self.updateServerStatus()
 
     # Load configuration defaults (some of this will later be superceded by live API data)
-    def loadPugConfig(self, setupfile):
-        with open(setupfile) as f:
+    def loadConfig(self, configFile):
+        with open(configFile) as f:
             info = json.load(f)
             self.postServer = info['setupapi']['postserver']
             self.authtoken = info['setupapi']['authtoken']
@@ -523,19 +524,21 @@ class GameServer:
                         self.gameServerRef = server['serverref']
             f.close()
             return True
+
     # Update config (currently only maplist is being saved)
-    def savePugConfig(self, setupfile, maplist):
-        with open(setupfile) as f:
+    def saveConfig(self, configFile, maplist):
+        with open(configFile) as f:
             info = json.load(f)
             if len(self.configMaps):
                 info['maplist'] = self.configMaps
             if len(maplist):
                 info['maplist'] = maplist
             f.close()
-        with open(setupfile,'w') as f:
+        with open(configFile,'w') as f:
             json.dump(info,f, indent=4)
             
         return True
+
     #########################################################################################
     # Formatted JSON
     #########################################################################################
@@ -692,7 +695,20 @@ class GameServer:
 
     #########################################################################################
     # Functions:
-    #########################################################################################
+    ######################################################################################### 
+    def makePostRequest(self, server, headers, json=None):
+        if json:
+            try:
+                r = requests.post(server, headers=headers, json=json)
+            except requests.exceptions.RequestException:
+                return None
+        else:
+            try:
+                r = requests.post(server, headers=headers)
+            except requests.exceptions.RequestException:
+                return None
+        return r
+
     def removeServerReference(self, serverref: str):
         if serverref in self.current_serverrefs() and serverref not in [None, '']:
             self.allServers.pop(self.current_serverrefs().index(serverref))
@@ -723,15 +739,15 @@ class GameServer:
         if restrict and (datetime.now() - self.lastUpdateTime).total_seconds() < delay:
             # 5 second delay between requests when restricted.
             return None
-        
+
         if allservers:
-            r = requests.post(self.postServer, headers=self.format_post_header_list)
+            r = self.makePostRequest(self.postServer, self.format_post_header_list)
         else:
             body = self.format_post_body_serverref()
-            r = requests.post(self.postServer, headers=self.format_post_header_list, json=body)
+            r = self.makePostRequest(self.postServer, self.format_post_header_list, body)
 
         self.lastUpdateTime = datetime.now()
-        if(r):
+        if(r):            
             return r.json()
         else:
             return None
@@ -739,7 +755,7 @@ class GameServer:
     def validateServers(self):
         if len(self.allServers):
             info = self.getServerList()
-            if len(info):
+            if info and len(info):
                 # firstly, determine if the primary server is online and responding, then drop the local list
                 serverDefaultPresent = False
                 for svc in info:
@@ -747,7 +763,7 @@ class GameServer:
                         # If for whatever reason the default server isn't working, then stick to local list for now.
                         serverDefaultPresent = True
                         break
- 
+
                 if serverDefaultPresent:
                     # Default is present and working, re-iterate through list and populate local var
                     self.allServers = []
@@ -765,7 +781,7 @@ class GameServer:
             # 5 second delay between requests when restricted.
             return None
         body = self.format_post_body_serverref()
-        r = requests.post(self.postServer, headers=self.format_post_header_check, json=body)
+        r = self.makePostRequest(self.postServer, self.format_post_header_check, body)
         self.lastUpdateTime = datetime.now()
         if(r):
             return r.json()
@@ -793,7 +809,7 @@ class GameServer:
         self.generatePasswords()
         headers = self.format_post_header_setup
         body = self.format_post_body_setup(numPlayers, maps)
-        r = requests.post(self.postServer, headers=headers, json=body)
+        r = self.makePostRequest(self.postServer, headers, body)
         if(r):
             info = r.json()
             self.lastSetupResult = info['setupResult']
@@ -817,7 +833,7 @@ class GameServer:
         if not self.updateServerStatus():
             return False
         body = self.format_post_body_serverref()
-        r = requests.post(self.postServer, headers=self.format_post_header_endgame, json=body)
+        r = self.makePostRequest(self.postServer, self.format_post_header_endgame, body)
         if(r):
             info = r.json()
             self.lastSetupResult = info['setupResult']
@@ -844,11 +860,11 @@ class GameServer:
 #########################################################################################
 class AssaultPug(PugTeams):
     """Represents a Pug of 2 teams (to be selected), a set of maps to be played and a server to play on."""
-    def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps):
+    def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps, configFile=DEFAULT_CONFIG_FILE):
         super().__init__(numPlayers, pickModeTeams)
         self.name = 'ASPug'
         self.desc = 'Assault PUG'
-        self.servers = [GameServer(DEFAULT_CONFIG_FILE)]
+        self.servers = [GameServer(configFile)]
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
         
@@ -1073,10 +1089,13 @@ class PugIsInProgress(commands.CommandError):
 # Main pug cog class.
 #########################################################################################
 class PUG(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot, configFile=DEFAULT_CONFIG_FILE):
         self.bot = bot
-        self.activeChannel = None
-        self.pugInfo = AssaultPug(DEFAULT_PLAYERS, DEFAULT_MAPS, DEFAULT_PICKMODETEAMS, DEFAULT_PICKMODEMAPS)
+        self.activeChannel = None       
+        self.pugInfo = AssaultPug(DEFAULT_PLAYERS, DEFAULT_MAPS, DEFAULT_PICKMODETEAMS, DEFAULT_PICKMODEMAPS, configFile)
+        self.configFile = configFile
+
+        self.loadConfig(configFile)
 
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
         self.updateGameServer.start()
@@ -1084,6 +1103,9 @@ class PUG(commands.Cog):
     def cog_unload(self):
         self.updateGameServer.cancel()
 
+#########################################################################################
+# Loops.
+#########################################################################################
     @tasks.loop(seconds=60.0)
     async def updateGameServer(self):
         if self.pugInfo.pugLocked:
@@ -1103,6 +1125,35 @@ class PUG(commands.Cog):
     async def before_updateGameServer(self):
         print('Waiting for updating game server...\n')
         await self.bot.wait_until_ready()
+
+#########################################################################################
+# Utilities.
+#########################################################################################
+    def loadConfig(self, configFile):
+        with open(configFile) as f:
+            info = json.load(f)
+            if info:
+                channelID = info['pug']['activechannelid']
+                channel = discord.Client.get_channel(self.bot, channelID)
+                print("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
+                if channel:
+                    self.activeChannel = channel
+                    print("Set active channel: {0}".format(channel.name))
+                else:
+                    self.activeChannel = None
+            f.close()
+        return True
+
+    def saveConfig(self, configFile):
+        with open(configFile) as f:
+            info = json.load(f)
+            if self.activeChannel:
+                info['pug']['activechannelid'] = self.activeChannel.id
+            else:
+                info['pug']['activechannelid'] = 0
+        with open(configFile,'w') as f:
+            json.dump(info,f, indent=4)
+        return True
 
     #########################################################################################
     # Formatted strings:
@@ -1217,9 +1268,9 @@ class PUG(commands.Cog):
     #########################################################################################
     @commands.command()
     @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def enable(self, ctx):
-        """Enables PUG commands in the channel. Note only one channel can be active at a time."""
+        """Enables PUG commands in the channel. Note only one channel can be active at a time. Admin only"""
         if self.activeChannel:
             if self.activeChannel == ctx.message.channel:
                 await ctx.send('PUG commands are already enabled in {}'.format(ctx.message.channel.mention))
@@ -1227,11 +1278,12 @@ class PUG(commands.Cog):
             await self.activeChannel.send('PUG commands have been disabled in {0}. They are now enabled in {1}'.format(self.activeChannel.mention, ctx.message.channel.mention))
             await ctx.send('PUG commands have been disabled in {}'.format(self.activeChannel.mention))
         self.activeChannel = ctx.message.channel
+        self.saveConfig(self.configFile)
         await ctx.send('PUG commands are enabled in {}'.format(self.activeChannel.mention))
 
     @commands.command()
     @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
     async def adminadd(self, ctx, player: discord.Member):
@@ -1249,7 +1301,7 @@ class PUG(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
     async def adminremove(self, ctx, player: discord.Member):
@@ -1262,7 +1314,7 @@ class PUG(commands.Cog):
             await self.processPugStatus(ctx)
 
     @commands.command(aliases=['setserver','setactiveserver'])
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     @commands.check(isPugInProgress_Warn)
     async def adminsetserver(self, ctx, idx: int):
         """Sets the active server to the index chosen from the pool of available servers. Admin only"""
@@ -1278,7 +1330,7 @@ class PUG(commands.Cog):
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
 
     @commands.command()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     @commands.check(isPugInProgress_Warn)
     async def refreshservers(self, ctx):
         """Refreshes the server list within the available pool. Admin only"""
@@ -1288,7 +1340,7 @@ class PUG(commands.Cog):
             await ctx.send('Server list could not be refreshed.')
 
     @commands.command()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def adminremoveserver(self, ctx, svref: str):
         # Removed add server in favour of pulling from API; left remove server in here in case one needs temporarily removing until restart
         """Removes a server from available pool. Admin only"""
@@ -1298,27 +1350,27 @@ class PUG(commands.Cog):
             await ctx.send('Server could not be removed. Is it even in the list?')
 
     @commands.command()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def adminaddmap(self, ctx, map: str):
         """Adds a map to the available map list. Admin only"""
         if self.pugInfo.maps.addMapToAvailableList(map):
-            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
+            self.pugInfo.gameServer.configFile(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
 
     @commands.command()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def adminremovemap(self, ctx, map: str):
         """Removes a map to from available map list. Admin only"""
         if self.pugInfo.maps.removeMapFromAvailableList(map):
-            self.pugInfo.gameServer.savePugConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
+            self.pugInfo.gameServer.configFile(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
 
     @commands.command()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def passwords(self, ctx):
         """Provides current game passwords to the requesting administrator. Admin only"""
         if self.isPugInProgress:
@@ -1333,14 +1385,15 @@ class PUG(commands.Cog):
     #########################################################################################
     @commands.command()
     @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
+    @commands.check(admin.hasManagerRole_Check)
     async def disable(self, ctx):
-        """Disables PUG commands in the channel. Note only one channel can be active at a time."""
+        """Disables PUG commands in the channel. Note only one channel can be active at a time. Admin only"""
         if self.activeChannel:
             await self.activeChannel.send('PUG commands now disabled.')
             if ctx.message.channel != self.activeChannel:
                 await ctx.send('PUG commands are disabled in ' + self.activeChannel.mention)
             self.activeChannel = None
+            self.saveConfig(self.configFile)
             return
         await ctx.send('PUG commands were not active in any channels.')
 
@@ -1545,4 +1598,4 @@ class PUG(commands.Cog):
             await ctx.send(self.pugInfo.format_last_pug)
 
 def setup(bot):
-    bot.add_cog(PUG(bot))
+    bot.add_cog(PUG(bot, DEFAULT_CONFIG_FILE))
