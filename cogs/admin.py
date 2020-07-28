@@ -1,5 +1,5 @@
-import discord
 import json
+import discord
 from discord.ext import commands, tasks
 
 DEFAULT_CONFIG_FILE = 'servers/config.json'
@@ -29,8 +29,14 @@ class Admin(commands.Cog):
     def loadConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
-            self.managerRole = info['admin']['managerrole'] # role should be stored as the name.
-            print("Loaded manager role: {0}".format(self.managerRole))
+            if info:
+                if 'admin' in info and 'managerrole' in info['admin']:
+                    self.managerRole = info['admin']['managerrole'] # role should be stored as the name.
+                    print("Loaded manager role: {0}".format(self.managerRole))
+                else:
+                    print("No manager role found in config file.")
+            else:
+                print("Admin: Config file could not be loaded: {0}".format(configFile))
             f.close()
         return True
 
@@ -38,9 +44,13 @@ class Admin(commands.Cog):
     def saveConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
+            if 'admin' not in info:
+                info['admin'] = {}
             info['admin']['managerrole'] = self.managerRole
+            f.close()
         with open(configFile,'w') as f:
-            json.dump(info,f, indent=4)
+            json.dump(info, f, indent=4)
+            f.close()
         return True
 
     def hasManagerRole(self, ctx):
@@ -64,7 +74,7 @@ class Admin(commands.Cog):
     @commands.is_owner()
     async def setmanagerrole(self, ctx, role):
         """Sets the role which the bot will accept admin commands from"""
-        if role in ctx.guild.roles:
+        if discord.utils.get(ctx.guild.roles, name=role) or discord.utils.get(ctx.guild.roles, mention=role):
             await ctx.send("Previous role was: **{0}**. New role is: **{1}**.".format(self.managerRole, role))
             self.managerRole = role
             self.saveConfig(self.configFile)

@@ -510,20 +510,33 @@ class GameServer:
     def loadConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
-            self.postServer = info['setupapi']['postserver']
-            self.authtoken = info['setupapi']['authtoken']
-            if len(info['maplist']):
-                print('Loaded {0} maps from config.json'.format(len(info['maplist'])))
-                self.configMaps = info['maplist']
+            if info:
+                if 'setupapi' in info:
+                    setupapi = info['setupapi']
+                    if 'postserver' in setupapi:
+                        self.postServer = setupapi['postserver']
+                    if 'authtoken' in setupapi:
+                        self.authtoken = info['setupapi']['authtoken']
+                else:
+                    print('setupapi not found in config file.')
+                if 'maplist' in info and len(info['maplist']):
+                    print('Loaded {0} maps from config.json'.format(len(info['maplist'])))
+                    self.configMaps = info['maplist']
+                else:
+                    print('Maplist not found in config file.')
 
-            # Iterate through local cache of servers, and set the default if present
-            if len(info['serverlist']):
-                for server in info['serverlist']:
-                    self.updateServerReference(server['serverref'],server['servername'])
-                    if 'serverdefault' in server.keys():
-                        self.gameServerRef = server['serverref']
+                # Iterate through local cache of servers, and set the default if present
+                if 'serverlist' in info and len(info['serverlist']):
+                    for server in info['serverlist']:
+                        self.updateServerReference(server['serverref'],server['servername'])
+                        if 'serverdefault' in server.keys():
+                            self.gameServerRef = server['serverref']
+                else:
+                    print('Serverlist not found in config file.')
+            else:
+                print("GameServer: Config file could not be loaded: {0}".format(configFile))
             f.close()
-            return True
+        return True
 
     # Update config (currently only maplist is being saved)
     def saveConfig(self, configFile, maplist):
@@ -534,9 +547,9 @@ class GameServer:
             if len(maplist):
                 info['maplist'] = maplist
             f.close()
-        with open(configFile,'w') as f:
-            json.dump(info,f, indent=4)
-            
+        with open(configFile, 'w') as f:
+            json.dump(info, f, indent=4)
+            f.close()
         return True
 
     #########################################################################################
@@ -1133,26 +1146,30 @@ class PUG(commands.Cog):
         with open(configFile) as f:
             info = json.load(f)
             if info:
-                channelID = info['pug']['activechannelid']
-                channel = discord.Client.get_channel(self.bot, channelID)
-                print("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
-                if channel:
-                    self.activeChannel = channel
-                    print("Set active channel: {0}".format(channel.name))
+                if 'pug' in info and 'activechannelid' in info['pug']:
+                    channelID = info['pug']['activechannelid']
+                    channel = discord.Client.get_channel(self.bot, channelID)
+                    print("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
+                    if channel:
+                        self.activeChannel = channel
                 else:
-                    self.activeChannel = None
+                    print("No active channel id found in config file.")
+            else:
+                print("PUG: Config file could not be loaded: {0}".format(configFile))
             f.close()
         return True
 
     def saveConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
+            if 'pug' not in info:
+                info['pug'] = {}
             if self.activeChannel:
                 info['pug']['activechannelid'] = self.activeChannel.id
             else:
                 info['pug']['activechannelid'] = 0
         with open(configFile,'w') as f:
-            json.dump(info,f, indent=4)
+            json.dump(info, f, indent=4)
         return True
 
     #########################################################################################
