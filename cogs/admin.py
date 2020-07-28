@@ -83,17 +83,16 @@ class Admin(commands.Cog):
 
     @commands.command(hidden=True, invoke_without_command=True)
     @commands.is_owner()
-    async def shutdown(self, ctx):
-        """Shuts the bot down. It must be restarted manually."""
-        print("Shutting down.")
-        await ctx.send("Shutting down.")
-        await ctx.bot.logout()
-
-    @commands.command(hidden=True, invoke_without_command=True)
-    @commands.is_owner()
     async def getmanagerrole(self, ctx):
         """Gets the current role which the bot will accept admin commands from"""
         await ctx.send("Current manager role is set to: **{0}**".format(self.managerRole))
+
+    @commands.command(hidden=True, invoke_without_command=True)
+    @commands.is_owner()
+    async def shutdown(self, ctx):
+        print("Shutting down.")
+        await ctx.send("Shutting down.")
+        await ctx.bot.logout()
 
     @commands.command(hidden=True, invoke_without_command=True)
     @commands.is_owner()
@@ -127,24 +126,6 @@ class Admin(commands.Cog):
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
-
-    @commands.group(name='reload', hidden=True, invoke_without_command=True)
-    @commands.is_owner()
-    async def _reload(self, ctx, *, module):
-        """Reloads a module."""
-        try:
-            self.bot.reload_extension(module)
-        except commands.ExtensionError as e:
-            await ctx.send(f'{e.__class__.__name__}: {e}')
-        else:
-            await ctx.send('\N{OK HAND SIGN}')
-
-    @commands.command(hidden=True, invoke_without_command=True)
-    @commands.is_owner()
-    async def shutdown(self, ctx):
-        print("Shutting down.")
-        await ctx.send("Shutting down.")
-        await ctx.bot.logout()
 
 def setup(bot):
     bot.add_cog(Admin(bot, DEFAULT_CONFIG_FILE))
