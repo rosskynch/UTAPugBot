@@ -17,7 +17,7 @@ class Info(commands.Cog):
         result = ['**__About Me:__**']
         result.append('- Version: {}'.format(VERSION))
         result.append('- Author: uZi')
-        result.append('- GitHub: https://github.com/rosskynch/UTAPugBot')
+        result.append('- GitHub: <https://github.com/rosskynch/UTAPugBot>')
         result.append('- Library: discord.py')        
         await ctx.send('\n'.join(result))
 
