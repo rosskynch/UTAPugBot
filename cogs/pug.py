@@ -968,12 +968,12 @@ class AssaultPug(PugTeams):
 
     @property
     def format_pug_short(self):
-        fmt = '**__{0.desc} [{1}/{0.maxPlayers}] || {2} maps__**'
-        return fmt.format(self, len(self), self.maps.maxMaps)
+        fmt = '**__{0.desc} [{1}/{0.maxPlayers}] \|\| {2} \|\| {3} maps__**'
+        return fmt.format(self, len(self), self.gameServer.gameServerName, self.maps.maxMaps)
 
     def format_pug(self, number=True, mention=False):
-        fmt = '**__{0.desc} [{1}/{0.maxPlayers}] || {2} maps:__**\n{3}'
-        return fmt.format(self, len(self), self.maps.maxMaps, self.format_all_players(number=number, mention=mention))
+        fmt = '**__{0.desc} [{1}/{0.maxPlayers}] \|\| {2} \|\| {3} maps:__**\n{4}'
+        return fmt.format(self, len(self), self.gameServer.gameServerName,self.maps.maxMaps, self.format_all_players(number=number, mention=mention))
 
     @property
     def format_match_is_ready(self):
@@ -1341,7 +1341,7 @@ class PUG(commands.Cog):
 
             # Bit of a hack to get around the problem of a match being in progress when this is initialised.
             # Will improve this later.
-            if self.gameServer.lastSetupResult == 'Match In Progress':
+            if self.pugInfo.gameServer.lastSetupResult == 'Match In Progress':
                 self.pugLocked = True
         else:
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
