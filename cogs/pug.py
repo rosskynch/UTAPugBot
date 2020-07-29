@@ -1618,8 +1618,8 @@ class PUG(commands.Cog):
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def stats(self, ctx):
-        """Shows the last pug info"""
-        await ctx.send("UTAPUG stats: https://www.utassault.net/pugstats")
+        """Get a link to the pug stats page"""
+        await ctx.send("UTAPUG stats: <https://www.utassault.net/pugstats>")
 
 def setup(bot):
     bot.add_cog(PUG(bot, DEFAULT_CONFIG_FILE))

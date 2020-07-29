@@ -56,5 +56,21 @@ class Info(commands.Cog):
         """Checks user permissions are correct to use elevated commands"""
         await ctx.send('You have permissions.')
 
+    @commands.command()
+    @commands.guild_only()
+    async def downloads(self, ctx):
+        """Shows useful downloads"""
+        str = ["Useful Downloads:"]
+        str.append("**__Unreal Tournament 99__**")
+        str.append("**UT clean install**(*with patch, optional updated renderers, LeagueAS140, UTAMapPack, XConsole*): <https://mega.nz/file/YJwXVKoD#bmxaFkJXnbdkPNPMA6VfAqNAjO4qyrpNAK-X0CKHjz4> (Setup Required use README)")
+        str.append("**MLUT clean install**: <http://www.prounreal.org/UTMLUT-edition3d.rar>")
+        str.append("**UT1337 install**(*Includes UTBonusPacks, SpecFix, Demo Manager 3.4, XConsole, XBrowser and crosshairs*): <http://www.prounreal.org/UTMLUT-edition3d.rar>")
+        str.append("")
+        str.append("**__Useful Extras__**")
+        str.append("**UTA Map Pack**: <https://mega.nz/file/9VZBUCbD#tFXTamvQ5gy-40cOatrJ275ZZ5UqArdf3oCg4nytOqk>")
+        str.append("**AssaultBonusPak.u**(*required for playing some maps, included in UTA Map Pack*): <https://mega.nz/file/NZo3jCQR#Y9m5VapDPQiEkqyxT2E15NSgMvF0Ltwx3tbaZ8HV0zg>")
+        str.append("**XConsole**: <http://www.unrealize.co.uk/cgi-bin/downloader/dl.pl?id=xconsole.zip>")
+        await ctx.send('\n'.join(str))
+
 def setup(bot):
     bot.add_cog(Info(bot))
