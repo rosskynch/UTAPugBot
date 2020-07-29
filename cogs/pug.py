@@ -1327,7 +1327,7 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was removed by an admin.', format(display_name(player)))
             await self.processPugStatus(ctx)
         else:
-            await ctx.send('Something went wrong.')
+            await ctx.send('{0} is not in the pug.'.format(display_nam(player)))
             await self.processPugStatus(ctx)
 
     @commands.command(aliases=['setserver','setactiveserver'])
