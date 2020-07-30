@@ -84,7 +84,7 @@ class Info(commands.Cog):
     @commands.guild_only()
     async def hammerbind(self, ctx):
         """Shows a hammerjump bind"""
-        await ctx.send("Aliases[XX]=(Command="getweapon ImpactHammer | Button bFire | Fire | OnRelease Jump",Alias=hjump)")
+        await ctx.send("Aliases[XX]=(Command=\"getweapon ImpactHammer | Button bFire | Fire | OnRelease Jump\",Alias=hjump)")
 
 def setup(bot):
     bot.add_cog(Info(bot))
