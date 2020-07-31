@@ -539,13 +539,32 @@ class GameServer:
         return True
 
     # Update config (currently only maplist is being saved)
-    def saveConfig(self, configFile, maplist):
+    def saveMapConfig(self, configFile, maplist):
         with open(configFile) as f:
             info = json.load(f)
             if len(self.configMaps):
                 info['maplist'] = self.configMaps
             if len(maplist):
                 info['maplist'] = maplist
+            f.close()
+        with open(configFile, 'w') as f:
+            json.dump(info, f, indent=4)
+            f.close()
+        return True
+
+    def saveServerConfig(self, configFile):
+        with open(configFile) as f:
+            info = json.load(f)
+            if len(self.allServers):
+                info['serverlist'] = []
+                for s in self.allServers:
+                    # allServers[x][0] = server ref
+                    # allServers[x][1] = server name
+                    # allServers[x][3] = server url
+                    serverinfo = {"serverref": s[0], "servername": s[1], "serverurl": s[2]}
+                    if s[0] == self.gameServerRef:
+                        serverinfo["serverdefault"] = True
+                    info['serverlist'].append(serverinfo)
             f.close()
         with open(configFile, 'w') as f:
             json.dump(info, f, indent=4)
@@ -643,9 +662,9 @@ class GameServer:
             i += 1
             servername = '{0}'.format(s[1])
             for flag in flags:
-                servername  = re.compile(flag, re.IGNORECASE).sub(flags[flag],servername)
+                servername  = re.compile(flag, re.IGNORECASE).sub(flags[flag], servername)
                 #servername = servername.replace(flag, flags[flag])
-            msg.append('{0}. {1} - {2}'.format(i,servername,s[2]))
+            msg.append('{0}. {1} - {2}'.format(i, servername, s[2]))
         return '\n'.join(msg)
 
     @property
@@ -731,7 +750,7 @@ class GameServer:
     def updateServerReference(self, serverref: str, serverdesc: str, serverurl: str = ''):
         if serverref in self.current_serverrefs() and serverref not in [None, '']:
             self.allServers.pop(self.current_serverrefs().index(serverref))
-        self.allServers.append((serverref,serverdesc,serverurl))
+        self.allServers.append((serverref, serverdesc, serverurl))
         return True
     
     def useServer(self, index: int):
@@ -739,6 +758,7 @@ class GameServer:
         if index >= 0 and index < len(self.allServers):
             self.gameServerRef = self.allServers[index][0]
             self.updateServerStatus()
+            self.saveServerConfig(self.configFile)
             return True
         return False
 
@@ -781,8 +801,11 @@ class GameServer:
                     # Default is present and working, re-iterate through list and populate local var
                     self.allServers = []
                     for sv in info:
-                        if sv['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
-                            self.updateServerReference(sv['serverRef'],sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'],sv['serverPort']))
+                        if sv['serverStatus']['Summary'] not in [None, '', 'N/A', 'N/AN/A']:
+                            self.updateServerReference(sv['serverRef'], sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'], sv['serverPort']))
+
+                # Write the server config:
+                self.saveServerConfig(self.configFile)
                 return True
             else:
                 return True # query failed, fall back to local json config
@@ -1327,7 +1350,7 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was removed by an admin.', format(display_name(player)))
             await self.processPugStatus(ctx)
         else:
-            await ctx.send('{0} is not in the pug.'.format(display_nam(player)))
+            await ctx.send('{0} is not in the pug.'.format(display_name(player)))
             await self.processPugStatus(ctx)
 
     @commands.command(aliases=['setserver','setactiveserver'])
@@ -1371,7 +1394,7 @@ class PUG(commands.Cog):
     async def adminaddmap(self, ctx, map: str):
         """Adds a map to the available map list. Admin only"""
         if self.pugInfo.maps.addMapToAvailableList(map):
-            self.pugInfo.gameServer.configFile(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
+            self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile, self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
@@ -1381,7 +1404,7 @@ class PUG(commands.Cog):
     async def adminremovemap(self, ctx, map: str):
         """Removes a map to from available map list. Admin only"""
         if self.pugInfo.maps.removeMapFromAvailableList(map):
-            self.pugInfo.gameServer.configFile(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
+            self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
             await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
