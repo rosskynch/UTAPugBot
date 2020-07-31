@@ -64,6 +64,7 @@ class Info(commands.Cog):
         str.append("Note:")
         str.append("To PUG you'll need a UT install with LeagueAS140 and the UTA Mappack. To run the game smoothly above 90 FPS you'll need to use the new 469 patch (currently in beta).")
         str.append("To run smoothly, it's recommended you use the D3D9 Renderer.")
+        str.append("")
         str.append("**__Unreal Tournament 99__**")
         # Removed because smant is being a bitch.
         #str.append("**UT clean install**(*with patch, optional updated renderers, LeagueAS140, UTAMapPack, XConsole*): <https://mega.nz/file/YJwXVKoD#bmxaFkJXnbdkPNPMA6VfAqNAjO4qyrpNAK-X0CKHjz4> (Setup Required use README)")
@@ -75,7 +76,7 @@ class Info(commands.Cog):
         str.append("**UTA Map Pack**: <https://mega.nz/file/9VZBUCbD#tFXTamvQ5gy-40cOatrJ275ZZ5UqArdf3oCg4nytOqk>")
         str.append("**AssaultBonusPak.u**(*required for playing some maps, included in UTA Map Pack*): <https://mega.nz/file/NZo3jCQR#Y9m5VapDPQiEkqyxT2E15NSgMvF0Ltwx3tbaZ8HV0zg>")
         str.append("**XConsole**: <http://www.unrealize.co.uk/cgi-bin/downloader/dl.pl?id=xconsole.zip>")
-        str.append("D3D9 Renderer (*main site is: <https://www.cwdohnal.com/utglr>*): <https://www.cwdohnal.com/utglr/utd3d9r13.zip>")
+        str.append("**D3D9 Renderer** (*main site is: <https://www.cwdohnal.com/utglr>*): <https://www.cwdohnal.com/utglr/utd3d9r13.zip>")
         str.append("**UT469 Patch**(*beta testers need to sign up*): <https://www.oldunreal.com/cgi-bin/yabb2/YaBB.pl?board=UnrealTournament>")
         str.append("**UT469 Beta Patch May 25th:**(*MAKE A COPY OF YOUR UT INSTALL FIRST!!! Then extract into the UT folder*): <https://mega.nz/file/sNxBBb6L#7bPdKuXOkImSv4w8JBrEhA05YIgUOk_Hmbisc-bjPLE>")
         await ctx.send('\n'.join(str))
