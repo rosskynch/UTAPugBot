@@ -1,8 +1,6 @@
 import json
 import discord
 from discord.ext import commands, tasks
-import os
-import subprocess
 
 DEFAULT_CONFIG_FILE = 'servers/config.json'
 DEFAULT_MANAGER_ROLE = 'PugBotManager'
@@ -128,18 +126,6 @@ class Admin(commands.Cog):
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
-
-    @commands.group(hidden=True, invoke_without_command=True)
-    @commands.is_owner()
-    async def gitpull(self, ctx):
-        """Pulls from the repo, if possible."""
-        print("Attempting pull from repo")
-        try:
-            output = subprocess.check_output(["git", "pull"])
-            print(output)
-            await ctx.send('\N{OK HAND SIGN}')
-        except:
-            await ctx.send('Failed')
 
 def setup(bot):
     bot.add_cog(Admin(bot, DEFAULT_CONFIG_FILE))
