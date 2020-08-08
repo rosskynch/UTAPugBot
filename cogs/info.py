@@ -77,8 +77,8 @@ class Info(commands.Cog):
         str.append("**AssaultBonusPak.u**(*required for playing some maps, included in UTA Map Pack*): <https://mega.nz/file/NZo3jCQR#Y9m5VapDPQiEkqyxT2E15NSgMvF0Ltwx3tbaZ8HV0zg>")
         str.append("**XConsole**: <http://www.unrealize.co.uk/cgi-bin/downloader/dl.pl?id=xconsole.zip>")
         str.append("**D3D9 Renderer** (*main site is: <https://www.cwdohnal.com/utglr>*): <https://www.cwdohnal.com/utglr/utd3d9r13.zip>")
-        str.append("**UT469 Patch**(*beta testers need to sign up*): <https://www.oldunreal.com/cgi-bin/yabb2/YaBB.pl?board=UnrealTournament>")
-        str.append("**UT469 Beta Patch May 25th:**(*MAKE A COPY OF YOUR UT INSTALL FIRST!!! Then extract into the UT folder*): <http://utgl.unrealadmin.org/OldUnreal/latest/OldUnreal-UTPatch469-Windows.zip>")
+        str.append("**UT469 Patch**(*beta testers should sign up*): <https://www.oldunreal.com/cgi-bin/yabb2/YaBB.pl?board=UnrealTournament>")
+        str.append("**UT469 Beta Patch Direct Link:**(*MAKE A COPY OF YOUR UT INSTALL FIRST!!! Then extract into the UT folder*): <http://utgl.unrealadmin.org/OldUnreal/latest/OldUnreal-UTPatch469-Windows.zip>")
         await ctx.send('\n'.join(str))
 
     @commands.command()
