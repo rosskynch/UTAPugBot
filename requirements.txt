@@ -7,3 +7,4 @@ random
 re
 requests
 json
+gitpython
