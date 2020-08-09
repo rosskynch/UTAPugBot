@@ -1,4 +1,5 @@
 import time
+import asyncpg
 from datetime import datetime
 import functools
 import itertools
@@ -1134,6 +1135,7 @@ class PUG(commands.Cog):
         self.loadConfig(configFile)
 
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
+        self.updateGameServer.add_exception_type(asyncpg.PostgresConnectionError)
         self.updateGameServer.start()
 
     def cog_unload(self):
@@ -1159,8 +1161,9 @@ class PUG(commands.Cog):
 
     @updateGameServer.before_loop
     async def before_updateGameServer(self):
-        print('Waiting for updating game server...\n')
+        print('Waiting before updating game server...')
         await self.bot.wait_until_ready()
+        print('Ready.')
 
 #########################################################################################
 # Utilities.

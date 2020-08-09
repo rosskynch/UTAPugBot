@@ -7,3 +7,5 @@ random
 re
 requests
 json
+asyncpg
+gitpython
