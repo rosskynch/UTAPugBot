@@ -1584,7 +1584,7 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Ignore)
     async def randomcaptains(self, ctx):
         """Picks a random captain for each team without a captain."""
-        if not self.pugInfo.playersReady and not self.pugInfo.captainsReady:
+        if not self.pugInfo.playersReady or self.pugInfo.captainsReady:
             return
 
         if not self.pugInfo.red:
