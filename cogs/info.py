@@ -87,5 +87,17 @@ class Info(commands.Cog):
         """Shows a hammerjump bind"""
         await ctx.send("Aliases[XX]=(Command=\"getweapon ImpactHammer | Button bFire | Fire | OnRelease Jump\",Alias=hjump)")
 
+    @commands.command(aliases = ['bt'])
+    @commands.guild_only()
+    async def bunnytrack(self, ctx):
+        """Shows UTA BunnyTrack server info"""
+        await ctx.send("UTA BunnyTrack server: **unreal://www.utapug.net:9100**")
+
+    @commands.command(aliases = ['ra'])
+    @commands.guild_only()
+    async def rocketarena(self, ctx):
+        """Shows UTA RocketArena server info"""
+        await ctx.send("UTA RocketArena server: **unreal://www.utapug.net:9600**")
+
 def setup(bot):
     bot.add_cog(Info(bot))
