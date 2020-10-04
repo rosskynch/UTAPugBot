@@ -1599,6 +1599,7 @@ class PUG(commands.Cog):
                 pick = random.choice(self.pugInfo.players)
             self.pugInfo.setCaptain(pick)
             await ctx.send(pick.mention + ' is captain for the **Blue Team**')
+        await self.processPugStatus(ctx)
 
     @commands.command(aliases=['p'])
     @commands.guild_only()
