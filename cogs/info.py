@@ -83,6 +83,12 @@ class Info(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
+    async def stats(self, ctx):
+        """Get a link to the pug stats page"""
+        await ctx.send("UTAPUG stats: <https://www.utassault.net/pugstats>")
+
+    @commands.command()
+    @commands.guild_only()
     async def hammerbind(self, ctx):
         """Shows a hammerjump bind"""
         await ctx.send("Aliases[XX]=(Command=\"getweapon ImpactHammer | Button bFire | Fire | OnRelease Jump\",Alias=hjump)")

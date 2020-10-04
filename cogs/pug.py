@@ -1578,6 +1578,28 @@ class PUG(commands.Cog):
                 await ctx.send(player.mention + ' is captain for the **Red Team**')
                 await self.processPugStatus(ctx)
 
+    @commands.command(aliases=['randcap'])
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Ignore)
+    async def randomcaptains(self, ctx):
+        """Picks a random captain for each team without a captain."""
+        if not self.pugInfo.playersReady and not self.pugInfo.captainsReady:
+            return
+
+        if not self.pugInfo.red:
+            pick = None
+            while not pick:
+                pick = random.choice(self.pugInfo.players)
+            self.pugInfo.setCaptain(pick)
+            await ctx.send(pick.mention + ' is captain for the **Red Team**')
+        if not self.pugInfo.blue:
+            pick = None
+            while not pick:
+                pick = random.choice(self.pugInfo.players)
+            self.pugInfo.setCaptain(pick)
+            await ctx.send(pick.mention + ' is captain for the **Blue Team**')
+
     @commands.command(aliases=['p'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
@@ -1639,13 +1661,6 @@ class PUG(commands.Cog):
             await ctx.send('\n'.join(msg))
         else:
             await ctx.send(self.pugInfo.format_last_pug)
-
-    @commands.command()
-    @commands.guild_only()
-    @commands.check(isActiveChannel_Check)
-    async def stats(self, ctx):
-        """Get a link to the pug stats page"""
-        await ctx.send("UTAPUG stats: <https://www.utassault.net/pugstats>")
 
 def setup(bot):
     bot.add_cog(PUG(bot, DEFAULT_CONFIG_FILE))
