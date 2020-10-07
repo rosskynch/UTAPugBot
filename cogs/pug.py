@@ -433,11 +433,20 @@ class PugTeams(Players):
             self.task.cancel()
 
     def setCaptain(self, player):
-        if player in self.players and self.playersFull:
+        if player and player in self.players and self.playersFull:
             index = self.players.index(player)
+            # Pick a random team.
+            remaining = []
             if not self.red:
+                remaining.append('red')
+            if not self.blue:
+                remaining.append('blue')
+            team = random.choice(remaining)
+
+            # Add player to chosen team.
+            if team == 'red':
                 self.red.append(player)
-            elif not self.blue:
+            elif team == 'blue':
                 self.blue.append(player)
             else:
                 return False
@@ -1254,6 +1263,10 @@ class PUG(commands.Cog):
             return
         
         if self.pugInfo.captainsReady:
+            # Special case to display captains on the first pick.
+            if len(self.pugInfo.red) == 1 and len(self.pugInfo.blue) == 1:
+                await ctx.send(self.pugInfo.red[0].mention + ' is captain for the **Red Team**')
+                await ctx.send(self.pugInfo.blue[0].mention + ' is captain for the **Blue Team**')
             # Need to pick players.
             msg = '\n'.join([
                 self.pugInfo.format_remaining_players(number=True),
@@ -1263,8 +1276,8 @@ class PUG(commands.Cog):
             return
         
         if self.pugInfo.numCaptains == 1:
-            # Need second captain (blue is always second)
-            await ctx.send('Waiting for **Blue Team** captain. Type **!captain** to become Blue captain.')
+            # Need second captain.
+            await ctx.send('Waiting for 2nd captain. Type **!captain** to become a captain. To choose a random captain type **!randomcaptains**')
             return
 
         if self.pugInfo.playersReady:
@@ -1280,8 +1293,8 @@ class PUG(commands.Cog):
 
             # Standard case, moving to captain selection.
             msg.append(self.pugInfo.format_pug(mention=True))
-            # Need first captain (red is always first)
-            msg.append('Type **!captain** to become Red captain.')
+            # Need first captain
+            msg.append('Waiting for captains. Type **!captain** to become a captain. To choose random captains type **!randomcaptains**')
             await ctx.send('\n'.join(msg))
             return
 
@@ -1565,18 +1578,13 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Ignore)
     async def captain(self, ctx):
         """Volunteer to be a captain in the pug"""
-        if self.pugInfo.gameServer.matchInProgress: # Not strictly needed here, would be caught by setCaptain.
+        if not self.pugInfo.playersReady or self.pugInfo.captainsReady or self.pugInfo.gameServer.matchInProgress:
             return
 
         player = ctx.message.author
-
         if self.pugInfo.setCaptain(player):
-            if self.pugInfo.captainsFull:
-                await ctx.send(player.mention + ' is captain for the **Blue Team**')
-                await self.processPugStatus(ctx)
-            else:
-                await ctx.send(player.mention + ' is captain for the **Red Team**')
-                await self.processPugStatus(ctx)
+            await ctx.send(player.mention + ' has volunteered as a captain!')
+            await self.processPugStatus(ctx)
 
     @commands.command(aliases=['randcap'])
     @commands.guild_only()
@@ -1587,18 +1595,11 @@ class PUG(commands.Cog):
         if not self.pugInfo.playersReady or self.pugInfo.captainsReady:
             return
 
-        if not self.pugInfo.red:
+        while not self.pugInfo.captainsReady:
             pick = None
             while not pick:
                 pick = random.choice(self.pugInfo.players)
             self.pugInfo.setCaptain(pick)
-            await ctx.send(pick.mention + ' is captain for the **Red Team**')
-        if not self.pugInfo.blue:
-            pick = None
-            while not pick:
-                pick = random.choice(self.pugInfo.players)
-            self.pugInfo.setCaptain(pick)
-            await ctx.send(pick.mention + ' is captain for the **Blue Team**')
         await self.processPugStatus(ctx)
 
     @commands.command(aliases=['p'])
