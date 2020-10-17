@@ -1053,7 +1053,7 @@ class AssaultPug(PugTeams):
         if self.lastPugTimeStarted:
             fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted, datetime.now())))
             fmt.append(self.lastPugTeams)
-            fmt.append('Mode: ' + self.lastMode + '\n')
+            fmt.append('Mode: ' + self.lastMode)
             fmt.append('Maps:\n{}'.format(self.lastPugMaps))
         else:
             fmt.append(self.lastPugTeams)
