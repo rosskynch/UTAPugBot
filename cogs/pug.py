@@ -41,9 +41,9 @@ DEFAULT_CONFIG_FILE = 'servers/config.json'
 # Valid modes with default config
 Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
-    "std": Mode(12, 0, None),
-    "pro": Mode(8, 100, None),
-    "insta": Mode(8, 0, "LeagueAS-SP.iAS")
+    "stdAS": Mode(12, 0, None),
+    "proAS": Mode(8, 100, None),
+    "iAS": Mode(8, 0, "LeagueAS-SP.iAS")
 }
 
 RED_PASSWORD_PREFIX = 'RP'
@@ -735,9 +735,9 @@ class GameServer:
         msg = ['```']
         msg.append('Server: ' + info['serverName'])
         msg.append(self.format_gameServerURL)
-        msg.append('Mode: ' + self.mode)
         msg.append('Summary: ' + info['serverStatus']['Summary'])
-        msg.append('Map: ' + info['serverStatus']['Map'])  
+        msg.append('Map: ' + info['serverStatus']['Map'])
+        msg.append('Mode: ' + info['serverStatus']['Mode'])
         msg.append('Players: ' + info['serverStatus']['Players'])
         msg.append('Remaining Time: ' + info['serverStatus']['RemainingTime'])
         msg.append('TournamentMode: ' + info['serverStatus']['TournamentMode'])
@@ -865,6 +865,7 @@ class GameServer:
         self.generatePasswords()
         headers = self.format_post_header_setup
         body = self.format_post_body_setup(numPlayers, maps, mode)
+
         r = self.makePostRequest(self.postServer, headers, body)
         if(r):
             info = r.json()
@@ -919,7 +920,7 @@ class AssaultPug(PugTeams):
     def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps, configFile=DEFAULT_CONFIG_FILE):
         super().__init__(numPlayers, pickModeTeams)
         self.name = 'ASPug'
-        self.mode = 'std'
+        self.mode = 'stdAS'
         self.desc = 'Assault ' + self.mode + ' PUG'
         self.servers = [GameServer(configFile)]
         self.serverIndex = 0
@@ -1040,7 +1041,7 @@ class AssaultPug(PugTeams):
             fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
             fmt.append(self.format_teams(mention=False))
             fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
-            fmt.append('Mode: ' + self.mode + '\n')
+            fmt.append('Mode: ' + self.mode)
             fmt.append(self.gameServer.format_game_server)
             fmt.append(self.gameServer.format_spectator_password)
             return '\n'.join(fmt)
@@ -1133,18 +1134,18 @@ class AssaultPug(PugTeams):
     def setMode(self, mode):
         if mode not in MODE_CONFIG:
             #TODO: change hardcoded std pro insta message to use keys from MODE_CONFIG
-            return False, "Mode not recognised. Valid modes are 'std', 'pro', or 'insta'"
+            return False, "Mode not recognised. Valid modes are 'stdAS', 'proAS', or 'iAS'"
         ## ProAS and iAS are played with a different maximum number of players.
         ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
-        elif mode != "std" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
-            return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode + " assault"
+        elif mode != "stdAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
+            return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
         else:
             ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
-            if mode != "std" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
+            if mode != "stdAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
                 self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
             self.mode = mode
             self.desc = 'Assault ' + mode + ' PUG'
-            return True, "Pug mode changed to: " + mode + " assault"
+            return True, "Pug mode changed to: " + mode
 
 
 #########################################################################################
