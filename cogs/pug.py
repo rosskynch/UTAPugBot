@@ -1,3 +1,4 @@
+import collections
 import time
 import asyncpg
 from datetime import datetime
@@ -36,6 +37,14 @@ DEFAUlT_GAME_SERVER_NAME = 'Unknown Server'
 DEFAULT_POST_SERVER = 'https://www.utassault.net'
 DEFAULT_POST_TOKEN = 'NoToken'
 DEFAULT_CONFIG_FILE = 'servers/config.json'
+
+# Valid modes with default config
+Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
+MODE_CONFIG = {
+    "stdAS": Mode(12, 0, None),
+    "proAS": Mode(8, 100, None),
+    "iAS": Mode(8, 0, "LeagueAS-SP.iAS")
+}
 
 RED_PASSWORD_PREFIX = 'RP'
 BLUE_PASSWORD_PREFIX = 'BP'
@@ -622,7 +631,7 @@ class GameServer:
         }
         return fmt
 
-    def format_post_body_setup(self, numPlayers, maps):
+    def format_post_body_setup(self, numPlayers, maps, mode):
         fmt = {
             "server": self.gameServerRef,
             "authEnabled": True,
@@ -635,8 +644,8 @@ class GameServer:
             "specPass": self.spectatorPassword,
             "maplist": maps,
             "gameType": "LeagueAS140.LeagueAssault",
-            "mutators": None,
-            "friendlyFireScale": 0,
+            "mutators": MODE_CONFIG[mode].mutators,
+            "friendlyFireScale": MODE_CONFIG[mode].friendlyFireScale,
             "initialWait": 180
         }
         return fmt
@@ -727,7 +736,8 @@ class GameServer:
         msg.append('Server: ' + info['serverName'])
         msg.append(self.format_gameServerURL)
         msg.append('Summary: ' + info['serverStatus']['Summary'])
-        msg.append('Map: ' + info['serverStatus']['Map'])  
+        msg.append('Map: ' + info['serverStatus']['Map'])
+        msg.append('Mode: ' + info['serverStatus']['Mode'])
         msg.append('Players: ' + info['serverStatus']['Players'])
         msg.append('Remaining Time: ' + info['serverStatus']['RemainingTime'])
         msg.append('TournamentMode: ' + info['serverStatus']['TournamentMode'])
@@ -848,13 +858,14 @@ class GameServer:
         self.lastSetupResult = 'Failed'
         return False
 
-    def setupMatch(self, numPlayers, maps):
+    def setupMatch(self, numPlayers, maps, mode):
         if not self.updateServerStatus() or self.matchInProgress:
             return False
 
         self.generatePasswords()
         headers = self.format_post_header_setup
-        body = self.format_post_body_setup(numPlayers, maps)
+        body = self.format_post_body_setup(numPlayers, maps, mode)
+
         r = self.makePostRequest(self.postServer, headers, body)
         if(r):
             info = r.json()
@@ -909,14 +920,16 @@ class AssaultPug(PugTeams):
     def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps, configFile=DEFAULT_CONFIG_FILE):
         super().__init__(numPlayers, pickModeTeams)
         self.name = 'ASPug'
-        self.desc = 'Assault PUG'
+        self.mode = 'stdAS'
+        self.desc = 'Assault ' + self.mode + ' PUG'
         self.servers = [GameServer(configFile)]
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
-        
+
         self.lastPugTeams = 'No previous pug.'
         self.lastPugMaps = None
         self.lastPugTimeStarted = None
+        self.lastMode = None
         self.pugLocked = False
 
         # Bit of a hack to get around the problem of a match being in progress when this is initialised.
@@ -1028,6 +1041,7 @@ class AssaultPug(PugTeams):
             fmt = ['Match in progress ({} ago):'.format(getDuration(self.lastPugTimeStarted, datetime.now()))]
             fmt.append(self.format_teams(mention=False))
             fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
+            fmt.append('Mode: ' + self.mode)
             fmt.append(self.gameServer.format_game_server)
             fmt.append(self.gameServer.format_spectator_password)
             return '\n'.join(fmt)
@@ -1039,6 +1053,7 @@ class AssaultPug(PugTeams):
         if self.lastPugTimeStarted:
             fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted, datetime.now())))
             fmt.append(self.lastPugTeams)
+            fmt.append('Mode: ' + self.lastMode)
             fmt.append('Maps:\n{}'.format(self.lastPugMaps))
         else:
             fmt.append(self.lastPugTeams)
@@ -1087,7 +1102,7 @@ class AssaultPug(PugTeams):
             # Try to set up 5 times with a 5s delay between attempts.
             result = False
             for x in range(0, 5):
-                result = self.gameServer.setupMatch(self.maxPlayers, self.maps.maps)
+                result = self.gameServer.setupMatch(self.maxPlayers, self.maps.maps, self.mode)
 
                 if not result:
                     time.sleep(5)
@@ -1103,6 +1118,7 @@ class AssaultPug(PugTeams):
             self.lastPugTeams = self.format_teams()
             self.lastPugMaps = self.maps.format_current_maplist
             self.lastPugTimeStarted = datetime.now()
+            self.lastMode = self.mode
             return True
         return False
 
@@ -1114,6 +1130,23 @@ class AssaultPug(PugTeams):
             self.gameServer.endMatch()
         self.pugLocked = False
         return True
+
+    def setMode(self, mode):
+        if mode not in MODE_CONFIG:
+            #TODO: change hardcoded std pro insta message to use keys from MODE_CONFIG
+            return False, "Mode not recognised. Valid modes are 'stdAS', 'proAS', or 'iAS'"
+        ## ProAS and iAS are played with a different maximum number of players.
+        ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
+        elif mode != "stdAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
+            return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
+        else:
+            ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
+            if mode != "stdAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
+                self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
+            self.mode = mode
+            self.desc = 'Assault ' + mode + ' PUG'
+            return True, "Pug mode changed to: " + mode
+
 
 #########################################################################################
 # Static methods for cogs.
@@ -1137,7 +1170,7 @@ class PugIsInProgress(commands.CommandError):
 class PUG(commands.Cog):
     def __init__(self, bot, configFile=DEFAULT_CONFIG_FILE):
         self.bot = bot
-        self.activeChannel = None       
+        self.activeChannel = None
         self.pugInfo = AssaultPug(DEFAULT_PLAYERS, DEFAULT_MAPS, DEFAULT_PICKMODETEAMS, DEFAULT_PICKMODEMAPS, configFile)
         self.configFile = configFile
 
@@ -1495,16 +1528,32 @@ class PUG(commands.Cog):
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
+    async def setmode(self, ctx, mode):
+        """Sets mode of the pug"""
+        if self.pugInfo.captainsReady:
+            await ctx.send('Pug already in picking mode. Reset if you wish to change mode.')
+        else:
+            result = self.pugInfo.setMode(mode)
+            # Send result message to channel regardless of success/failure
+            await ctx.send(result[1])
+            # If mode successfully changed, process pug status
+            if result[0]:
+                await self.processPugStatus(ctx)
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Warn)
     async def setplayers(self, ctx, limit: int):
         """Sets number of players"""
         if self.pugInfo.captainsReady:
             await ctx.send('Pug already in picking mode. Reset if you wish to change player limit.')
-        elif (limit > 1 and limit % 2 == 0 and limit <= MAX_PLAYERS_LIMIT):
+        elif (limit > 1 and limit % 2 == 0 and limit <= MODE_CONFIG[self.pugInfo.mode].maxPlayers):
             self.pugInfo.setMaxPlayers(limit)
             await ctx.send('Player limit set to ' + str(self.pugInfo.maxPlayers))
             await self.processPugStatus(ctx)
         else:
-            await ctx.send('Player limit unchanged. Players must be a multiple of 2 + between 2 and ' + str(MAX_PLAYERS_LIMIT))
+            await ctx.send('Player limit unchanged. Players must be a multiple of 2 + between 2 and ' + str(MODE_CONFIG[self.pugInfo.mode].maxPlayers))
 
     @commands.command()
     @commands.guild_only()
