@@ -57,7 +57,7 @@ class Admin(commands.Cog):
 
     def hasManagerRole(self, ctx):
         # Always allow if the author is a server admin:
-        if commands.check(commands.has_permissions(manage_guild=True)):
+        if ctx.message.author.guild_permissions.administrator:
             return True
         # Otherwise check roles:
         # Uses the name of the role to find it. An alternative is to use the whole role or id,
