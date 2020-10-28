@@ -5,6 +5,9 @@ import logging
 import sys
 import traceback
 
+# Intents required to work with the discord API (updated October 2020)
+intents = intents = discord.Intents().all()
+
 description = 'Discord Assault PUG Bot'
 
 extensions = ['cogs.admin', 'cogs.info', 'cogs.pug']
@@ -21,7 +24,8 @@ bot = commands.Bot(
         command_prefix=['!','.'],
         description=description,
         pm_help=None,
-        help_attrs=help_attrs)
+        help_attrs=help_attrs,
+        intents=intents)
 
 @bot.event
 async def on_ready():
