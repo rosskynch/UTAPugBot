@@ -1147,10 +1147,12 @@ class AssaultPug(PugTeams):
                     self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
                 self.mode = mode
                 self.desc = 'Assault ' + mode + ' PUG'
-                return True, "Pug mode changed to: " + mode
+                return True, "Pug mode changed to: **" + mode + "**"
         else:
-            #TODO: change hardcoded std pro insta message to use keys from MODE_CONFIG
-            return False, "Mode not recognised. Valid modes are 'stdAS', 'proAS', or 'iAS'"
+            outStr = ["Mode not recognised. Valid modes are:"]
+            for k in MODE_CONFIG:
+                outStr.append("**" + k + "**")
+            return False, ' '.join(outStr)
         
 
 #########################################################################################
