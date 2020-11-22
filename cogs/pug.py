@@ -1132,21 +1132,26 @@ class AssaultPug(PugTeams):
         return True
 
     def setMode(self, mode):
-        if mode not in MODE_CONFIG:
+        # Dictionaries are case sensitive, so we'll do a map first to test case-insensitive input, then find the actual key after
+        if mode.upper() in map(str.upper, MODE_CONFIG):
+            ## Iterate through the keys to find the actual case-insensitive mode
+            mode = next((key for key, value in MODE_CONFIG.items() if key.upper()==mode.upper()), None)
+
+            ## ProAS and iAS are played with a different maximum number of players.
+            ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
+            if mode.upper() != "STDAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
+                return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
+            else:
+                ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
+                if mode.upper() != "STDAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
+                    self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
+                self.mode = mode
+                self.desc = 'Assault ' + mode + ' PUG'
+                return True, "Pug mode changed to: " + mode
+        else:
             #TODO: change hardcoded std pro insta message to use keys from MODE_CONFIG
             return False, "Mode not recognised. Valid modes are 'stdAS', 'proAS', or 'iAS'"
-        ## ProAS and iAS are played with a different maximum number of players.
-        ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
-        elif mode != "stdAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
-            return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
-        else:
-            ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
-            if mode != "stdAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
-                self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
-            self.mode = mode
-            self.desc = 'Assault ' + mode + ' PUG'
-            return True, "Pug mode changed to: " + mode
-
+        
 
 #########################################################################################
 # Static methods for cogs.
