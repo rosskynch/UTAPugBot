@@ -347,8 +347,6 @@ class PugTeams(Players):
         super().__init__(maxPlayers)
         self.teams = (Team(), Team())
         self.pickMode = pickMode
-        self.here = [True, True] # Not used, could add later.
-        self.task = None # Not used, might need later.
 
     def __contains__(self, player):
         return player in self.all
@@ -356,15 +354,11 @@ class PugTeams(Players):
     def __getstate__(self):
         state = super().__getstate__()
         del state['teams']
-        del state['task']
-        del state['here']
         return state
 
     def __setstate__(self, state):
         super().__setstate__(state)
         self.teams = (Team(), Team())
-        self.task = None
-        self.here = [True, True]
 
     #########################################################################################
     # Properties
@@ -376,25 +370,30 @@ class PugTeams(Players):
     @property
     def captainsFull(self):
         return self.red and self.blue
+    
+    @property
+    def maxPicks(self):
+        return self.maxPlayers - 2
+
+    @property
+    def currentPickIndex(self):
+        return (len(self.red) + len(self.blue) - 2) if self.captainsFull else 0
 
     @property
     def currentTeamToPickPlayer(self):
-        return PICKMODES[self.pickMode][len(self.red) + len(self.blue) - 2] if len(self.red) + len(self.blue) > 1 else 0
+        return PICKMODES[self.pickMode][self.currentPickIndex]
 
     @property
     def currentCaptainToPickPlayer(self):
-        if self.captainsFull:
-            return self.teams[self.currentTeamToPickPlayer].captain
-        else:
-            return None
+        return self.teams[self.currentTeamToPickPlayer].captain if self.captainsFull else None
 
     @property
     def teamsFull(self):
         return len(self.red) + len(self.blue) == self.maxPlayers
 
     @property
-    def team(self):
-        return PICKMODES[self.pickMode][len(self.red) + len(self.blue) - 2]
+    def currentTeam(self):
+        return PICKMODES[self.pickMode][self.currentPickIndex]
 
     @property
     def red(self):
@@ -415,8 +414,6 @@ class PugTeams(Players):
         if player in self:
             if self.red:
                 self.softPugTeamReset()
-            if self.task:
-                self.task.cancel()
             self.removePlayer(player)
             return True
         return False
@@ -428,8 +425,6 @@ class PugTeams(Players):
             self.red.clear()
             self.blue.clear()
             self.here = [True, True]
-            if self.task:
-                self.task.cancel()
             return True
         return False
 
@@ -438,8 +433,6 @@ class PugTeams(Players):
         self.red.clear()
         self.blue.clear()
         self.here = [True, True]
-        if self.task:
-            self.task.cancel()
 
     def setCaptain(self, player):
         if player and player in self.players and self.playersFull:
@@ -470,14 +463,16 @@ class PugTeams(Players):
                 return False
 
             player = self.players[index]
-            self.teams[self.team].append(player)
+            self.teams[self.currentTeam].append(player)
             self.players[index] = None
 
-            # check to see if next team has any choice and move them
-            index = len(self.red) + len(self.blue) - 2
-            remaining = PICKMODES[self.pickMode][index:self.maxPlayers - 2]
-            if len(set(remaining)) == 1:
-                self.teams[remaining[0]].extend(p for p in self.players if p)
+            # Check if the next team has any choice of pick, if not fill automatically.
+            remainingPicks = PICKMODES[self.pickMode][self.currentPickIndex:self.maxPicks]
+            if len(set(remainingPicks)) == 1:
+                for i, p in enumerate(self.players):
+                    if p:
+                        self.teams[self.currentTeam].append(p)
+                        self.players[i] = None
             return True
 
 #########################################################################################
@@ -733,15 +728,18 @@ class GameServer:
         if not info:
             info = self.lastCheckJSON
         msg = ['```']
-        msg.append('Server: ' + info['serverName'])
-        msg.append(self.format_gameServerURL)
-        msg.append('Summary: ' + info['serverStatus']['Summary'])
-        msg.append('Map: ' + info['serverStatus']['Map'])
-        msg.append('Mode: ' + info['serverStatus']['Mode'])
-        msg.append('Players: ' + info['serverStatus']['Players'])
-        msg.append('Remaining Time: ' + info['serverStatus']['RemainingTime'])
-        msg.append('TournamentMode: ' + info['serverStatus']['TournamentMode'])
-        msg.append('Status: ' + info['setupResult'])
+        try:
+            msg.append('Server: ' + info['serverName'])
+            msg.append(self.format_gameServerURL)
+            msg.append('Summary: ' + info['serverStatus']['Summary'])
+            msg.append('Map: ' + info['serverStatus']['Map'])
+            msg.append('Mode: ' + info['serverStatus']['Mode'])
+            msg.append('Players: ' + info['serverStatus']['Players'])
+            msg.append('Remaining Time: ' + info['serverStatus']['RemainingTime'])
+            msg.append('TournamentMode: ' + info['serverStatus']['TournamentMode'])
+            msg.append('Status: ' + info['setupResult'])
+        except:
+            msg.append('WARNING: Unexpected or incomplete response from server.')
         msg.append('```')
         return '\n'.join(msg)
 
@@ -919,9 +917,9 @@ class AssaultPug(PugTeams):
     """Represents a Pug of 2 teams (to be selected), a set of maps to be played and a server to play on."""
     def __init__(self, numPlayers, numMaps, pickModeTeams, pickModeMaps, configFile=DEFAULT_CONFIG_FILE):
         super().__init__(numPlayers, pickModeTeams)
-        self.name = 'ASPug'
+        self.name = 'Assault'
         self.mode = 'stdAS'
-        self.desc = 'Assault ' + self.mode + ' PUG'
+        self.desc = self.name + ': ' + self.mode + ' PUG'
         self.servers = [GameServer(configFile)]
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
@@ -1019,7 +1017,7 @@ class AssaultPug(PugTeams):
 
     def format_pug(self, number=True, mention=False):
         fmt = '**__{0.desc} [{1}/{0.maxPlayers}] \|\| {2} \|\| {3} maps:__**\n{4}'
-        return fmt.format(self, len(self), self.gameServer.gameServerName,self.maps.maxMaps, self.format_all_players(number=number, mention=mention))
+        return fmt.format(self, len(self), self.gameServer.gameServerName, self.maps.maxMaps, self.format_all_players(number=number, mention=mention))
 
     @property
     def format_match_is_ready(self):
@@ -1322,7 +1320,7 @@ class PUG(commands.Cog):
 
         if self.pugInfo.playersReady:
             # Need captains.
-            msg = ['**{}** has filled.'.format(self.pugInfo.name)]
+            msg = ['**{}** has filled.'.format(self.pugInfo.desc)]
             if len(self.pugInfo) == 2 and self.pugInfo.playersFull:
                 # Special case, 1v1: assign captains instantly, so jump straight to map picks.
                 self.pugInfo.setCaptain(self.pugInfo.players[0])
@@ -1382,32 +1380,34 @@ class PUG(commands.Cog):
     @commands.check(admin.hasManagerRole_Check)
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
-    async def adminadd(self, ctx, player: discord.Member):
+    async def adminadd(self, ctx, *players: discord.Member):
         "Adds a player to the pug. Admin only"
-        if not self.pugInfo.addPlayer(player):
-            if self.pugInfo.playersReady:
-                await ctx.send('Pug is already full.')
-                return
+        failed = False
+        for player in players:
+            if not self.pugInfo.addPlayer(player):
+                failed = True
+                if self.pugInfo.playersReady:
+                    await ctx.send('Cannot add {0}: Pug is already full.'.format(display_name(player)))
+                else:
+                    await ctx.send('Cannot add {0}: They are already signed.'.format(display_name(player)))
             else:
-                await ctx.send('Already added.')
-                return
-        
-        await ctx.send('{0} was added by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
-        await self.processPugStatus(ctx)
+                await ctx.send('{0} was added by an admin. {1}'.format(display_name(player), self.pugInfo.format_pug()))
+        if not failed:
+            await self.processPugStatus(ctx)
 
     @commands.command()
     @commands.guild_only()
     @commands.check(admin.hasManagerRole_Check)
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
-    async def adminremove(self, ctx, player: discord.Member):
+    async def adminremove(self, ctx, *players: discord.Member):
         """Removes a player from the pug. Admin only"""
-        if self.pugInfo.removePlayerFromPug(player):
-            await ctx.send('**{0}** was removed by an admin.'.format(display_name(player)))
-            await self.processPugStatus(ctx)
-        else:
-            await ctx.send('{0} is not in the pug.'.format(display_name(player)))
-            await self.processPugStatus(ctx)
+        for player in players:
+            if self.pugInfo.removePlayerFromPug(player):
+                await ctx.send('**{0}** was removed by an admin.'.format(display_name(player)))
+            else:
+                await ctx.send('{0} is not in the pug.'.format(display_name(player)))
+        await self.processPugStatus(ctx)
 
     @commands.command(aliases=['setserver','setactiveserver'])
     @commands.check(admin.hasManagerRole_Check)
@@ -1499,9 +1499,32 @@ class PUG(commands.Cog):
     async def list(self, ctx):
         """Displays pug status"""
         if self.pugInfo.pugLocked:
+            # Pug in progress, show the teams/maps.
             await ctx.send(self.pugInfo.format_match_in_progress)
+        elif self.pugInfo.teamsReady:
+            # Picking maps, just display teams.
+            msg = '\n'.join([
+                self.pugInfo.format_pug_short,
+                self.pugInfo.format_teams(),
+                self.pugInfo.maps.format_current_maplist,
+                self.format_pick_next_map(mention=False)])
+            await ctx.send(msg)
+        elif self.pugInfo.captainsReady:
+            # Picking players, show remaining players to pick, but don't
+            # highlight the captain to avoid annoyance.
+            msg = '\n'.join([
+                self.pugInfo.format_pug_short,
+                self.pugInfo.format_remaining_players(number=True),
+                self.pugInfo.format_teams(),
+                self.format_pick_next_player(mention=False)])
+            await ctx.send(msg)
         else:
-            await ctx.send(self.pugInfo.format_pug())
+            # Default, show sign ups.
+            msg = []
+            msg.append(self.pugInfo.format_pug())
+            if self.pugInfo.playersReady:
+                msg.append('Waiting for captains. Type **!captain** to become a captain. To choose random captains type **!randomcaptains**')
+            await ctx.send('\n'.join(msg))
 
     @commands.command(aliases = ['pugtime'])
     @commands.guild_only()
@@ -1570,7 +1593,9 @@ class PUG(commands.Cog):
         """Sets number of maps"""
         if (self.pugInfo.maps.setMaxMaps(limit)):
             await ctx.send('Map limit set to ' + str(self.pugInfo.maps.maxMaps))
-            await self.processPugStatus(ctx)
+            if self.pugInfo.teamsReady:
+                # Only need to do this if maps already being picked, as it could mean the pug needs to be setup.
+                await self.processPugStatus(ctx)
         else:
             await ctx.send('Map limit unchanged. Map limit is {}'.format(self.pugInfo.maps.maxMapsLimit))
 
