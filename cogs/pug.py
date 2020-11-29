@@ -173,16 +173,20 @@ class Players:
     # Properties
     #########################################################################################
     @property
+    def numPlayers(self):
+        return len(self)
+
+    @property
     def playersBrief(self):
-        return '[{}/{}]'.format(len(self), self.maxPlayers)
+        return '[{}/{}]'.format(self.numPlayers, self.maxPlayers)
 
     @property
     def playersFull(self):
-        return len(self) == self.maxPlayers
+        return self.numPlayers == self.maxPlayers
 
     @property
     def playersNeeded(self):
-        return self.maxPlayers - len(self)
+        return self.maxPlayers - self.numPlayers
 
     #########################################################################################
     # Functions
@@ -939,13 +943,6 @@ class AssaultPug(PugTeams):
     # Properties:
     #########################################################################################
     @property
-    def currentCaptainToPickMap(self):
-        if self.captainsFull and not self.maps.mapsFull:
-            return self.teams[self.maps.currentTeamToPickMap].captain
-        else:
-            return None
-
-    @property
     def playersReady(self):
         if self.playersFull:
             return True
@@ -962,6 +959,13 @@ class AssaultPug(PugTeams):
         if self.captainsFull and self.teamsFull:
             return True
         return False
+
+    @property
+    def currentCaptainToPickMap(self):
+        if self.captainsFull and not self.maps.mapsFull:
+            return self.teams[self.maps.currentTeamToPickMap].captain
+        else:
+            return None
 
     @property
     def mapsReady(self):
@@ -1184,6 +1188,8 @@ class PUG(commands.Cog):
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
         self.updateGameServer.add_exception_type(asyncpg.PostgresConnectionError)
         self.updateGameServer.start()
+
+        self.lastPokeTime = datetime.now()
 
     def cog_unload(self):
         self.updateGameServer.cancel()
@@ -1533,6 +1539,20 @@ class PUG(commands.Cog):
     async def promote(self, ctx):
         """Promotes the pug"""
         await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for **{1}**!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    @commands.check(isPugInProgress_Ignore)
+    async def poke(self, ctx):
+        """Highlights those signed to pug. Limited to once per minute."""
+        # TODO: Switch the use of these times of limits to use the "cooldown" decorator. see https://stackoverflow.com/questions/46087253/cooldown-for-command-on-discord-bot-python
+        minPlayers = 2
+        delay = 60
+        if self.pugInfo.numPlayers < minPlayers or (datetime.now() - self.lastPokeTime).total_seconds() < delay:
+            return
+        self.lastPokeTime = datetime.now()
+        await ctx.send('Poking those signed (you will be unable to poke for {0} seconds): {1}'.format(delay, self.pugInfo.format_all_players(number=False, mention=True)))
 
     @commands.command(aliases = ['serverlist'])
     @commands.guild_only()
