@@ -43,7 +43,8 @@ Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
     "stdAS": Mode(12, 0, None),
     "proAS": Mode(8, 100, None),
-    "iAS": Mode(8, 0, "LeagueAS-SP.iAS")
+    "iAS": Mode(8, 0, "LeagueAS-SP.iAS"),
+    "ZPiAS": Mode(8, 0, "ZeroPingPlus103.ColorAccuGib")
 }
 
 RED_PASSWORD_PREFIX = 'RP'
