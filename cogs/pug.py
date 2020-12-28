@@ -1578,6 +1578,17 @@ class PUG(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
+    async def listmodes(self, ctx):
+        """Lists available modes for the pug"""
+        outStr = ["Available modes are:"]
+        for k in MODE_CONFIG:
+            outStr.append(PLASEP + "**" + k + "**")
+        outStr.append(PLASEP)
+        await ctx.send(" ".join(outStr))
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
     async def setmode(self, ctx, mode):
         """Sets mode of the pug"""
