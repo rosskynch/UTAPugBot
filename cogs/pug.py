@@ -1154,8 +1154,9 @@ class AssaultPug(PugTeams):
         else:
             outStr = ["Mode not recognised. Valid modes are:"]
             for k in MODE_CONFIG:
-                outStr.append("**" + k + "**")
-            return False, ' '.join(outStr)
+                outStr.append(PLASEP + "**" + k + "**")
+            outStr.append(PLASEP)
+            return False, " ".join(outStr)
         
 
 #########################################################################################
