@@ -99,6 +99,12 @@ class Info(commands.Cog):
         """Shows UTA BunnyTrack server info"""
         await ctx.send("UTA BunnyTrack server: **unreal://www.utapug.net:9100**")
 
+    @commands.command(aliases = ['tdm', 'dm'])
+    @commands.guild_only()
+    async def deathmatch(self, ctx):
+        """Shows UTA TDM server info"""
+        await ctx.send("UTA TDM server: **unreal://51.195.40.255:7777**")
+
     @commands.command(aliases = ['ra'])
     @commands.guild_only()
     async def rocketarena(self, ctx):
