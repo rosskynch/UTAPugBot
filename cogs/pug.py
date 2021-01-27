@@ -43,6 +43,7 @@ Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
     "stdAS": Mode(12, 0, None),
     "proAS": Mode(8, 100, None),
+    "lcAS": Mode(12, 0, "LCWeapons_0025uta.LCMutator"),
     "iAS": Mode(8, 0, "LeagueAS-SP.iAS"),
     "ZPiAS": Mode(8, 0, "ZeroPingPlus103.ColorAccuGib")
 }
@@ -1142,11 +1143,11 @@ class AssaultPug(PugTeams):
 
             ## ProAS and iAS are played with a different maximum number of players.
             ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
-            if mode.upper() != "STDAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
+            if mode.upper() != "STDAS" and mode.upper() != "LCAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
                 return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
             else:
                 ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
-                if mode.upper() != "STDAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
+                if mode.upper() != "STDAS" and mode.upper() != "LCAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
                     self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
                 self.mode = mode
                 self.desc = 'Assault ' + mode + ' PUG'
