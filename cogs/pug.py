@@ -291,6 +291,13 @@ class PugMaps:
             return True
         return False
 
+    def substituteMapInAvailableList(self, index: int, map: str):
+        # Index is already checked
+        if map not in self.availableMapsList and map not in [None, '']:
+            self.availableMapsList[index] = map
+            return True
+        return False
+
     def removeMapFromAvailableList(self, map: str):
         # Can't really verify the map, but ignore blank/None inputs.
         if map and map in self.availableMapsList:
@@ -1463,6 +1470,22 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
+    
+    @commands.command()
+    @commands.check(admin.hasManagerRole_Check)
+    async def adminreplacemap(self, ctx, *mapref: str):
+        """Replaces a map within the available map list. Admin only"""
+        if len(mapref) == 2 and mapref[0].isdigit() and (int(mapref[0]) > 0 and int(mapref[0]) <= len(self.pugInfo.maps.availableMapsList)):
+            index = int(mapref[0]) - 1 # offset as users see them 1-based index; the range check is performed before it gets here
+            map = mapref[1]
+            oldmap = self.pugInfo.maps.availableMapsList[index]
+            if self.pugInfo.maps.substituteMapInAvailableList(index, map):
+                self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile, self.pugInfo.maps.availableMapsList)
+                await ctx.send('**{1}** was added to the available maps by an admin in position #{0}, replacing {2}. The available maps are now:\n{3}'.format(mapref[0],map,oldmap,self.pugInfo.maps.format_available_maplist))
+            else:
+                await ctx.send('**{1}** could not be added in slot {0}. Is it already in the list? Is the position valid?'.format(mapref[0],map))
+        else:
+            await ctx.send('The valid format of this command is, for example: !adminreplacemap # AS-MapName, where # is a valid integer within the existing maplist.')
 
     @commands.command()
     @commands.check(admin.hasManagerRole_Check)
