@@ -43,6 +43,7 @@ Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
     "stdAS": Mode(12, 0, None),
     "proAS": Mode(8, 100, None),
+    "lcAS": Mode(12, 0, "LCWeapons_0025uta.LCMutator"),
     "iAS": Mode(8, 0, "LeagueAS-SP.iAS"),
     "ZPiAS": Mode(8, 0, "ZeroPingPlus103.ColorAccuGib")
 }
@@ -287,6 +288,13 @@ class PugMaps:
         # Can't really verify the map, but ignore blank/None inputs.
         if map not in self.availableMapsList and map not in [None, '']:
             self.availableMapsList.append(map)
+            return True
+        return False
+
+    def substituteMapInAvailableList(self, index: int, map: str):
+        # Index is already checked
+        if map not in self.availableMapsList and map not in [None, '']:
+            self.availableMapsList[index] = map
             return True
         return False
 
@@ -1142,11 +1150,11 @@ class AssaultPug(PugTeams):
 
             ## ProAS and iAS are played with a different maximum number of players.
             ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
-            if mode.upper() != "STDAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
+            if mode.upper() != "STDAS" and mode.upper() != "LCAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
                 return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
             else:
                 ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
-                if mode.upper() != "STDAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
+                if mode.upper() != "STDAS" and mode.upper() != "LCAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
                     self.setMaxPlayers(MODE_CONFIG[mode].maxPlayers)
                 self.mode = mode
                 self.desc = 'Assault ' + mode + ' PUG'
@@ -1462,6 +1470,22 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
+    
+    @commands.command()
+    @commands.check(admin.hasManagerRole_Check)
+    async def adminreplacemap(self, ctx, *mapref: str):
+        """Replaces a map within the available map list. Admin only"""
+        if len(mapref) == 2 and mapref[0].isdigit() and (int(mapref[0]) > 0 and int(mapref[0]) <= len(self.pugInfo.maps.availableMapsList)):
+            index = int(mapref[0]) - 1 # offset as users see them 1-based index; the range check is performed before it gets here
+            map = mapref[1]
+            oldmap = self.pugInfo.maps.availableMapsList[index]
+            if self.pugInfo.maps.substituteMapInAvailableList(index, map):
+                self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile, self.pugInfo.maps.availableMapsList)
+                await ctx.send('**{1}** was added to the available maps by an admin in position #{0}, replacing {2}. The available maps are now:\n{3}'.format(mapref[0],map,oldmap,self.pugInfo.maps.format_available_maplist))
+            else:
+                await ctx.send('**{1}** could not be added in slot {0}. Is it already in the list? Is the position valid?'.format(mapref[0],map))
+        else:
+            await ctx.send('The valid format of this command is, for example: !adminreplacemap # AS-MapName, where # is a valid integer within the existing maplist.')
 
     @commands.command()
     @commands.check(admin.hasManagerRole_Check)
