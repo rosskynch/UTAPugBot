@@ -1359,9 +1359,15 @@ class PUG(commands.Cog):
             msg_bluePassword = self.pugInfo.gameServer.format_blue_password
             msg_blueServer = self.pugInfo.gameServer.format_gameServerURL_blue
             for player in self.pugInfo.red:
-                await player.send('{0}\nJoin the server @ **{1}**'.format(msg_redPassword, msg_redServer))
+                try:
+                    await player.send('{0}\nJoin the server @ **{1}**'.format(msg_redPassword, msg_redServer))
+                except:
+                    await self.activeChannel.send('Unable to send password to {} - are DMs enabled? Please ask your teammates for the red team password.'.format(player.mention))
             for player in self.pugInfo.blue:
-                await player.send('{0}\nJoin the server @ **{1}**'.format(msg_bluePassword, msg_blueServer))
+                try:
+                    await player.send('{0}\nJoin the server @ **{1}**'.format(msg_bluePassword, msg_blueServer))
+                except:
+                    await self.activeChannel.send('Unable to send password to {} - are DMs enabled? Please ask your teammates for the blue team password.'.format(player.mention))
         if self.activeChannel:
             await self.activeChannel.send('Check private messages for server passwords.')
         return True

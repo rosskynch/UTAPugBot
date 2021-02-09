@@ -139,7 +139,11 @@ class Admin(commands.Cog):
             msg = g.pull()
             await ctx.send(msg)
         except git.exc.GitError as e:
-            await ctx.send('Failed: {}'.format(e.output))
+            await ctx.send('Error, check your private messages.')
+            try:
+                await ctx.message.author.send('Failed: {}'.format(e))
+            except:
+                await ctx.send('Failed to send PM, are your PMs enabled for this server?')
 
 def setup(bot):
     bot.add_cog(Admin(bot, DEFAULT_CONFIG_FILE))
