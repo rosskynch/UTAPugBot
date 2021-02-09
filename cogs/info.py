@@ -105,6 +105,12 @@ class Info(commands.Cog):
         """Shows UTA TDM server info"""
         await ctx.send("UTA TDM server: **unreal://51.195.40.255:7777**")
 
+    @commands.command(aliases = ['ffa'])
+    @commands.guild_only()
+    async def freeforall(self, ctx):
+        """Shows UTA FFA server info"""
+        await ctx.send("UTA FFA server: **unreal://51.195.40.255:7786**")
+
     @commands.command(aliases = ['ra'])
     @commands.guild_only()
     async def rocketarena(self, ctx):
