@@ -937,10 +937,8 @@ class AssaultPug(PugTeams):
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
 
-        self.lastPugTeams = 'No previous pug.'
-        self.lastPugMaps = None
+        self.lastPugStr = 'No last pug.'
         self.lastPugTimeStarted = None
-        self.lastMode = None
         self.pugLocked = False
 
         # Bit of a hack to get around the problem of a match being in progress when this is initialised.
@@ -1061,14 +1059,11 @@ class AssaultPug(PugTeams):
     @property
     def format_last_pug(self):
         fmt = []
-        if self.lastPugTimeStarted:
-            fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted, datetime.now())))
-            fmt.append(self.lastPugTeams)
-            fmt.append('Mode: ' + self.lastMode)
-            fmt.append('Maps:\n{}'.format(self.lastPugMaps))
+        if self.lastPugTimeStarted and '{}' in self.lastPugStr:
+            fmt.append(self.lastPugStr.format(getDuration(self.lastPugTimeStarted, datetime.now())))
         else:
-            fmt.append(self.lastPugTeams)
-        return '\n'.join(fmt)
+            fmt.append('No last pug info.')
+        return fmt
 
     @property
     def format_list_servers(self):
@@ -1119,17 +1114,18 @@ class AssaultPug(PugTeams):
                     time.sleep(5)
                 else:
                     self.pugLocked = True
-                    self.lastPugTimeStarted = datetime.now()
                     self.storeLastPug()
                     return True
         return False
 
     def storeLastPug(self):
         if self.matchReady:
-            self.lastPugTeams = self.format_teams()
-            self.lastPugMaps = self.maps.format_current_maplist
+            fmt = []
+            fmt.append('Last **{}** ({} ago)'.format(self.desc, '{}'))
+            fmt.append(self.format_teams())
+            fmt.append('Maps:\n{}'.format(self.maps.format_current_maplist))
+            self.lastPugStr = '\n'.join(fmt)
             self.lastPugTimeStarted = datetime.now()
-            self.lastMode = self.mode
             return True
         return False
 
