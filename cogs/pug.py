@@ -939,8 +939,9 @@ class AssaultPug(PugTeams):
 
         self.lastPugTeams = 'No previous pug.'
         self.lastPugMaps = None
+        self.lastPugDesc = None
         self.lastPugTimeStarted = None
-        self.lastMode = None
+        self.lastPugMode = None
         self.pugLocked = False
 
         # Bit of a hack to get around the problem of a match being in progress when this is initialised.
@@ -1062,9 +1063,9 @@ class AssaultPug(PugTeams):
     def format_last_pug(self):
         fmt = []
         if self.lastPugTimeStarted:
-            fmt.append('Last **{}** ({} ago)'.format(self.desc, getDuration(self.lastPugTimeStarted, datetime.now())))
+            fmt.append('Last **{}** ({} ago)'.format(self.LastPugDesc, getDuration(self.lastPugTimeStarted, datetime.now())))
             fmt.append(self.lastPugTeams)
-            fmt.append('Mode: ' + self.lastMode)
+            fmt.append('Mode: ' + self.lastPugMode)
             fmt.append('Maps:\n{}'.format(self.lastPugMaps))
         else:
             fmt.append(self.lastPugTeams)
@@ -1128,8 +1129,9 @@ class AssaultPug(PugTeams):
         if self.matchReady:
             self.lastPugTeams = self.format_teams()
             self.lastPugMaps = self.maps.format_current_maplist
+            self.lastPugDesc = self.desc
             self.lastPugTimeStarted = datetime.now()
-            self.lastMode = self.mode
+            self.lastPugMode = self.mode
             return True
         return False
 
