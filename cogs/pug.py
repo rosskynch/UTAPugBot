@@ -937,7 +937,7 @@ class AssaultPug(PugTeams):
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
 
-        self.lastPugStr = 'No last pug.'
+        self.lastPugStr = 'No last pug info available.'
         self.lastPugTimeStarted = None
         self.pugLocked = False
 
@@ -1058,12 +1058,10 @@ class AssaultPug(PugTeams):
 
     @property
     def format_last_pug(self):
-        fmt = []
         if self.lastPugTimeStarted and '{}' in self.lastPugStr:
-            fmt.append(self.lastPugStr.format(getDuration(self.lastPugTimeStarted, datetime.now())))
+            return self.lastPugStr.format(getDuration(self.lastPugTimeStarted, datetime.now()))
         else:
-            fmt.append('No last pug info.')
-        return fmt
+            return 'No last pug info available.'
 
     @property
     def format_list_servers(self):
