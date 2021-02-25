@@ -1611,7 +1611,13 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Ignore)
     async def promote(self, ctx):
-        """Promotes the pug"""
+        """Promotes the pug. Limited to once per minute alongside poke."""
+        # TODO: Switch the use of these times of limits to use the "cooldown" decorator. see https://stackoverflow.com/questions/46087253/cooldown-for-command-on-discord-bot-python
+        delay = 60
+        # reusing lastpoketime, so both are limited to one of the two per 60s
+        if (datetime.now() - self.lastPokeTime).total_seconds() < delay:
+            return
+        self.lastPokeTime = datetime.now()
         await ctx.send('Hey @here it\'s PUG TIME!!!\n**{0}** needed for **{1}**!'.format(self.pugInfo.playersNeeded, self.pugInfo.desc))
 
     @commands.command()
@@ -1619,7 +1625,7 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Ignore)
     async def poke(self, ctx):
-        """Highlights those signed to pug. Limited to once per minute."""
+        """Highlights those signed to pug. Limited to once per minute alongside promote."""
         # TODO: Switch the use of these times of limits to use the "cooldown" decorator. see https://stackoverflow.com/questions/46087253/cooldown-for-command-on-discord-bot-python
         minPlayers = 2
         delay = 60
