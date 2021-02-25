@@ -51,7 +51,7 @@ class Info(commands.Cog):
                     await ctx.send('No invites available')
 
     @commands.command()
-    @commands.check(commands.check(admin.hasManagerRole_Check))
+    @commands.check(admin.hasManagerRole_Check)
     async def checkpermissions(self, ctx):
         """Checks user permissions are correct to use elevated commands"""
         await ctx.send('You have permissions.')
