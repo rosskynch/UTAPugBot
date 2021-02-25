@@ -209,6 +209,8 @@ class Players:
         self.players = []
 
     def setMaxPlayers(self, numPlayers):
+        if (numPlayers < 1 or numPlayers % 2 > 0):
+            return
         if numPlayers < MAX_PLAYERS_LIMIT:
             self.maxPlayers = numPlayers
         else:
@@ -1187,7 +1189,7 @@ class PUG(commands.Cog):
         self.pugInfo = AssaultPug(DEFAULT_PLAYERS, DEFAULT_MAPS, DEFAULT_PICKMODETEAMS, DEFAULT_PICKMODEMAPS, configFile)
         self.configFile = configFile
 
-        self.loadConfig(configFile)
+        self.loadPugConfig(configFile)
 
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
         self.updateGameServer.add_exception_type(asyncpg.PostgresConnectionError)
@@ -1225,7 +1227,7 @@ class PUG(commands.Cog):
 #########################################################################################
 # Utilities.
 #########################################################################################
-    def loadConfig(self, configFile):
+    def loadPugConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
             if info:
@@ -1235,22 +1237,68 @@ class PUG(commands.Cog):
                     print("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
                     if channel:
                         self.activeChannel = channel
-                else:
-                    print("No active channel id found in config file.")
+                        # Only load current info if the channel is valid, otherwise the rest is useless.
+                        if 'current' in info['pug']:
+                            if 'mode' in info['pug']['current']:
+                                self.pugInfo.setMode(info['pug']['current']['mode'])
+                            if 'playerlimit' in info['pug']['current']:
+                                self.pugInfo.setMaxPlayers(info['pug']['current']['playerlimit'])
+                            if 'maxmaps' in info['pug']['current']:
+                                self.pugInfo.maps.setMaxMaps(info['pug']['current']['maxmaps'])
+                            if 'timesaved' in info['pug']['current']:
+                                time_saved = datetime.fromisoformat(info['pug']['current']['timesaved'])
+                                # Only load signed players if timesaved is present and it is within 60 seconds of when the file was last saved.
+                                # This is to avoid people thinking they were unsigned and causing a no-show.
+                                if (datetime.now() - time_saved).total_seconds() < 60 and 'signed' in info['pug']['current']:
+                                    players = info['pug']['current']['signed']
+                                    if players:
+                                        for player_id in players:
+                                            player = self.activeChannel.guild.get_member(player_id)
+                                            if player:
+                                                self.pugInfo.addPlayer(player)
+                        if 'lastpug' in info['pug']:
+                            if 'pugstr' in info['pug']['lastpug']:
+                                self.pugInfo.lastPugStr = info['pug']['lastpug']['pugstr']
+                                if 'timestarted' in info['pug']['lastpug']:
+                                    try:
+                                        self.pugInfo.lastPugTimeStarted = datetime.fromisoformat(info['pug']['lastpug']['timestarted'])
+                                    except:
+                                        self.pugInfo.lastPugTimeStarted = None
+                    else:
+                        print("No active channel id found in config file.")
             else:
                 print("PUG: Config file could not be loaded: {0}".format(configFile))
             f.close()
         return True
 
-    def saveConfig(self, configFile):
+    def savePugConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
+            last_active_channel_id = info['pug']['activechannelid']
             if 'pug' not in info:
                 info['pug'] = {}
             if self.activeChannel:
                 info['pug']['activechannelid'] = self.activeChannel.id
             else:
                 info['pug']['activechannelid'] = 0
+            # Only save info about the current/last pugs if the channel id is valid and unchanged in this save.
+            if self.activeChannel and self.activeChannel.id == last_active_channel_id:
+                # current pug info:
+                info['pug']['current'] = {}
+                info['pug']['current']['timesaved'] = datetime.now().isoformat()
+                info['pug']['current']['mode'] = self.pugInfo.mode
+                info['pug']['current']['playerlimit'] = self.pugInfo.maxPlayers
+                info['pug']['current']['maxmaps'] = self.pugInfo.maps.maxMaps
+                if len(self.pugInfo.players) > 0:
+                    info['pug']['current']['signed'] = []
+                    for p in self.pugInfo.players:
+                        info['pug']['current']['signed'].append(p.id)
+                # last pug info:
+                info['pug']['lastpug'] = {}
+                if self.pugInfo.lastPugTimeStarted:
+                    info['pug']['lastpug']['timestarted'] = self.pugInfo.lastPugTimeStarted.isoformat()
+                if self.pugInfo.lastPugStr:
+                    info['pug']['lastpug']['pugstr'] = self.pugInfo.lastPugStr
         with open(configFile,'w') as f:
             json.dump(info, f, indent=4)
         return True
@@ -1388,7 +1436,7 @@ class PUG(commands.Cog):
             await self.activeChannel.send('PUG commands have been disabled in {0}. They are now enabled in {1}'.format(self.activeChannel.mention, ctx.message.channel.mention))
             await ctx.send('PUG commands have been disabled in {}'.format(self.activeChannel.mention))
         self.activeChannel = ctx.message.channel
-        self.saveConfig(self.configFile)
+        self.savePugConfig(self.configFile)
         await ctx.send('PUG commands are enabled in {}'.format(self.activeChannel.mention))
 
     @commands.command()
@@ -1521,7 +1569,7 @@ class PUG(commands.Cog):
             if ctx.message.channel != self.activeChannel:
                 await ctx.send('PUG commands are disabled in ' + self.activeChannel.mention)
             self.activeChannel = None
-            self.saveConfig(self.configFile)
+            self.savePugConfig(self.configFile)
             return
         await ctx.send('PUG commands were not active in any channels.')
 

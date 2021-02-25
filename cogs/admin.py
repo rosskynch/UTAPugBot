@@ -92,6 +92,7 @@ class Admin(commands.Cog):
     @commands.command(hidden=True, invoke_without_command=True)
     @commands.is_owner()
     async def shutdown(self, ctx):
+        ctx.bot.get_cog('PUG').savePugConfig(ctx.bot.get_cog('PUG').configFile)
         print("Shutting down.")
         await ctx.send("Shutting down.")
         await ctx.bot.logout()
@@ -123,6 +124,9 @@ class Admin(commands.Cog):
     async def _reload(self, ctx, *, module):
         """Reloads a module."""
         try:
+            if str.lower(module) == 'cogs.pug':
+                # Save the config before reloading.
+                ctx.bot.get_cog('PUG').savePugConfig(ctx.bot.get_cog('PUG').configFile)
             self.bot.reload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
