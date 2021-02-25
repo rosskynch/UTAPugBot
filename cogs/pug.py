@@ -113,6 +113,8 @@ DISCORD_MD_ESCAPE_DICT = {c: '\\' + c for c in DISCORD_MD_CHARS}
 # Utilities
 #########################################################################################
 
+resetRequest = collections.namedtuple('resetRequest', 'red blue')
+
 def discord_md_escape(value):
     return DISCORD_MD_ESCAPE_RE.sub(lambda match: DISCORD_MD_ESCAPE_DICT[match.group(0)], value)
 
@@ -1191,6 +1193,11 @@ class PUG(commands.Cog):
 
         self.loadPugConfig(configFile)
 
+        # Used to keep track of if both teams have requested a reset while a match is in progress.
+        # We'll only make use of this in the reset() function so it only needs to be put back to
+        # (False, False) when a new match is setup.
+        self.resetRequest = resetRequest(False, False)
+
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
         self.updateGameServer.add_exception_type(asyncpg.PostgresConnectionError)
         self.updateGameServer.start()
@@ -1346,6 +1353,7 @@ class PUG(commands.Cog):
             if self.pugInfo.setupPug():
                 await self.sendPasswordsToTeams()
                 await ctx.send(self.pugInfo.format_match_is_ready)
+                self.resetRequest = resetRequest(False, False) # only need to reset this here because we only care about this when a match is in progress.
             else:
                 msg = ['**PUG Setup Failed**. Try again or contact an admin.']
                 msg.append('Resetting...')
@@ -1715,6 +1723,16 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     async def reset(self, ctx):
         """Resets the pug. Players will need to rejoin. This will reset the server, even if a match is running. Use with care."""
+        if not admin.hasManagerRole_Check(ctx) and (self.pugLocked or self.pugInfo.gameServer.matchInProgress):
+            if not self.resetRequest and ctx.author in self.pugInfo.red:
+                self.resetRequest.red = True
+                await ctx.send('Red team have requested reset.')
+            elif not self.resetRequest and ctx.author in self.pugInfo.blue:
+                self.resetRequest.blue = True
+                await ctx.send('Blue team have requested reset.')
+            if not self.resetRequest.red or not self.resetRequest.blue:
+                return
+
         await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
         if self.pugInfo.resetPug():
             await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
