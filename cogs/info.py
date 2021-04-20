@@ -78,7 +78,7 @@ class Info(commands.Cog):
         str.append("**AssaultBonusPak.u**(*required for playing some maps, included in UTA Map Pack*): <https://mega.nz/file/NZo3jCQR#Y9m5VapDPQiEkqyxT2E15NSgMvF0Ltwx3tbaZ8HV0zg>")
         str.append("**XConsole**: <http://www.unrealize.co.uk/cgi-bin/downloader/dl.pl?id=xconsole.zip>")
         str.append("**D3D9 Renderer** (*main site is: <https://www.cwdohnal.com/utglr>*): <https://www.cwdohnal.com/utglr/utd3d9r13.zip>")
-        str.append("**UT469 Patch**(*Make a copy of your UT folder before applying*): <https://github.com/OldUnreal/UnrealTournamentPatches/releases/tag/v469a>")
+        str.append("**UT469 Patch**(*Make a copy of your UT folder before applying*): <https://github.com/OldUnreal/UnrealTournamentPatches/releases/tag/v469b>")
         await ctx.send('\n'.join(str))
 
     @commands.command()
