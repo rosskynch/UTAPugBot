@@ -36,7 +36,7 @@ class Info(commands.Cog):
         if ctx.message.guild.id == UTASSAULT:
             # Stuff for UTAssault discord server
             # Perma-invite I created.
-            await ctx.send('https://discord.gg/H7FDYqM')
+            await ctx.send('https://discord.gg/s8UJcuR')
         else:
             try:
                 invites = await ctx.message.guild.invites()
