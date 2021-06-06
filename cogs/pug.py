@@ -288,32 +288,54 @@ class PugMaps:
         indexedMaplist = ((i, m) for i, m in enumerate(maps, 1) if m)
         return indexedMaplist
 
+    #########################################################################################
+    # Maintaining Available Maplist
+    #########################################################################################
+    def validateAvailableListIndex(self, index: int):
+        return index >= 0 and index < len(self.availableMapsList)
+
+    def validateAvailableListInsertIndex(self, index: int):
+        return index >= 0 and index <= len(self.availableMapsList)
+
+    def validateAvailableListNewMap(self, map: str):
+        # Can't really verify the map, but ignore blank/number/None inputs.
+        return (map not in self.availableMapsList and map not in [None, ''] and not map.isdigit())
+
     def addMapToAvailableList(self, map: str):
-        # Can't really verify the map, but ignore blank/None inputs.
-        if map not in self.availableMapsList and map not in [None, '']:
+        if self.validateAvailableListNewMap(map):
             self.availableMapsList.append(map)
             return True
         return False
 
     def substituteMapInAvailableList(self, index: int, map: str):
-        # Index is already checked
-        if map not in self.availableMapsList and map not in [None, '']:
+        # Index must be passed in as 0-based.
+        if self.validateAvailableListIndex(index) and self.validateAvailableListNewMap(map):
             self.availableMapsList[index] = map
             return True
         return False
 
+    def insertMapIntoAvailableList(self, index: int, map: str):
+        # Index must be passed in as 0-based.
+        if self.validateAvailableListInsertIndex(index) and self.validateAvailableListNewMap(map):
+            self.availableMapsList.insert(index, map)
+            return True
+        return False
+
     def removeMapFromAvailableList(self, map: str):
-        # Can't really verify the map, but ignore blank/None inputs.
         if map and map in self.availableMapsList:
             self.availableMapsList.remove(map)
             return True
         return False
 
     def getMapFromAvailableList(self, index: int):
-        if index < 0 or index >= len(self.availableMapsList):
-            return None
-        return self.availableMapsList[index]
+        # Index must be passed in as 0-based.
+        if self.validateAvailableListIndex(index):
+            return self.availableMapsList[index]
+        return None
 
+    #########################################################################################
+    # Picking a set of maps for a pug
+    #########################################################################################
     def setMaxMaps(self, numMaps: int):
         if numMaps > 0 and numMaps <= self.maxMapsLimit:
             self.maxMaps = numMaps
@@ -1526,13 +1548,27 @@ class PUG(commands.Cog):
             await ctx.send('**{0}** was added to the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be added. Is it already in the list?'.format(map))
-    
+
+    @commands.command()
+    @commands.check(admin.hasManagerRole_Check)
+    async def admininsertmap(self, ctx, index: int, map: str):
+        """Insert a map into the available map list at the given index. Admin only"""
+        if index > 0 and index <= self.pugInfo.maps.maxMapsLimit + 1:
+            offset_index = index - 1 # offset as users see them 1-based index
+            if self.pugInfo.maps.insertMapIntoAvailableList(offset_index, map):
+                self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile, self.pugInfo.maps.availableMapsList)
+                await ctx.send('**{0}** was inserted into the available maps by an admin. The available maps are now:\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
+            else:
+                await ctx.send('**{0}** could not be inserted. Is it already in the list?'.format(map))
+        else:
+            await ctx.send('The valid format of this command is, for example: !admininsertmap # AS-MapName, where # is in the range (1, NumMaps + 1).')
+
     @commands.command()
     @commands.check(admin.hasManagerRole_Check)
     async def adminreplacemap(self, ctx, *mapref: str):
         """Replaces a map within the available map list. Admin only"""
         if len(mapref) == 2 and mapref[0].isdigit() and (int(mapref[0]) > 0 and int(mapref[0]) <= len(self.pugInfo.maps.availableMapsList)):
-            index = int(mapref[0]) - 1 # offset as users see them 1-based index; the range check is performed before it gets here
+            index = int(mapref[0]) - 1 # offset as users see in a 1-based index; the range check is performed before it gets here
             map = mapref[1]
             oldmap = self.pugInfo.maps.availableMapsList[index]
             if self.pugInfo.maps.substituteMapInAvailableList(index, map):
@@ -1541,15 +1577,20 @@ class PUG(commands.Cog):
             else:
                 await ctx.send('**{1}** could not be added in slot {0}. Is it already in the list? Is the position valid?'.format(mapref[0],map))
         else:
-            await ctx.send('The valid format of this command is, for example: !adminreplacemap # AS-MapName, where # is a valid integer within the existing maplist.')
+            await ctx.send('The valid format of this command is, for example: !adminreplacemap # AS-MapName, where # is in the range (1, NumMaps).')
 
     @commands.command()
     @commands.check(admin.hasManagerRole_Check)
     async def adminremovemap(self, ctx, map: str):
         """Removes a map to from available map list. Admin only"""
-        if self.pugInfo.maps.removeMapFromAvailableList(map):
+        if map.isdigit():
+            index = int(map) - 1 # offset as users see in a 1-based index
+            mapNameToRemove = self.pugInfo.maps.getMapFromAvailableList(index)
+        else:
+            mapNameToRemove = map
+        if self.pugInfo.maps.removeMapFromAvailableList(mapNameToRemove):
             self.pugInfo.gameServer.saveMapConfig(self.pugInfo.gameServer.configFile,self.pugInfo.maps.availableMapsList)
-            await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(map, self.pugInfo.maps.format_available_maplist))
+            await ctx.send('**{0}** was removed from the available maps by an admin.\n{1}'.format(mapNameToRemove, self.pugInfo.maps.format_available_maplist))
         else:
             await ctx.send('**{0}** could not be removed. Is it in the list?'.format(map))
 
@@ -1829,7 +1870,7 @@ class PUG(commands.Cog):
                 await ctx.send('Teams have been selected:\n{}'.format(self.pugInfo.format_teams(mention=True)))
             await self.processPugStatus(ctx)
 
-    @commands.command()
+    @commands.command(aliases=['maplist'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def listmaps(self, ctx):
