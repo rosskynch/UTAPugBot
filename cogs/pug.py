@@ -290,10 +290,9 @@ class PugMaps:
 
     def addMapToAvailableList(self, map: str):
         # Can't really verify the map, but ignore blank/None inputs.
-        self.availableMapsList.insert(1,'AS-AutoRip')
-        #if map not in self.availableMapsList and map not in [None, '']:
-        #    self.availableMapsList.append(map)
-        #    return True
+        if map not in self.availableMapsList and map not in [None, '']:
+            self.availableMapsList.append(map)
+            return True
         return False
 
     def substituteMapInAvailableList(self, index: int, map: str):
