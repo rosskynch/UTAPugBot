@@ -1764,16 +1764,25 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     async def reset(self, ctx):
         """Resets the pug. Players will need to rejoin. This will reset the server, even if a match is running. Use with care."""
-        if (not admin.hasManagerRole_Check(ctx)) and (self.pugInfo.pugLocked or (self.pugInfo.gameServer and self.pugInfo.gameServer.matchInProgress)):
-            if not self.resetRequest.red:
-                self.resetRequest.red = ctx.author in self.pugInfo.red
-                await ctx.send('Red team have requested reset.')
-            elif not self.resetRequest.blue:
-                self.resetRequest.blue = ctx.author in self.pugInfo.blue
-                await ctx.send('Blue team have requested reset.')
-            if not self.resetRequest.red or not self.resetRequest.blue:
-                return
-
+        reset = False
+        if (admin.hasManagerRole_Check(ctx) or not(self.pugInfo.pugLocked or (self.pugInfo.gameServer and self.pugInfo.gameServer.matchInProgress))):
+            reset = True
+        else:
+            if ctx.author in self.pugInfo.red:
+                if self.resetRequest.red:
+                    await ctx.send('Red team have already requested reset. Blue team must also request.')
+                else:
+                    self.resetRequest.red = True
+                    await ctx.send('Red team have requested reset. Blue team must also request.')
+            elif ctx.author in self.pugInfo.blue:
+                if self.resetRequest.blue:
+                    await ctx.send('Blue team have already requested reset. Red team must also request.')
+                else:
+                    self.resetRequest.blue = True
+                    await ctx.send('Blue team have requested reset. Red team must also request.')
+            if self.resetRequest.red and self.resetRequest.blue:
+                reset = True
+        if reset:
         await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
         if self.pugInfo.resetPug():
             await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
