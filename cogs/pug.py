@@ -1783,9 +1783,9 @@ class PUG(commands.Cog):
             if self.resetRequest.red and self.resetRequest.blue:
                 reset = True
         if reset:
-        await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
-        if self.pugInfo.resetPug():
-            await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
+            await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
+            if self.pugInfo.resetPug():
+                await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
         else:
             await ctx.send('Reset failed. Please, try again or inform an admin.')
 
