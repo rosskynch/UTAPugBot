@@ -41,11 +41,11 @@ DEFAULT_CONFIG_FILE = 'servers/config.json'
 # Valid modes with default config
 Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
-    "stdAS": Mode(12, 0, None),
-    "proAS": Mode(8, 100, None),
-    "lcAS": Mode(12, 0, "LCWeapons_0025uta.LCMutator"),
-    "iAS": Mode(8, 0, "LeagueAS-SP.iAS"),
-    "ZPiAS": Mode(8, 0, "ZeroPingPlus103.ColorAccuGib")
+    "stdAS": Mode(20, 0, None),
+    "proAS": Mode(20, 100, None),
+    "lcAS": Mode(20, 0, "LCWeapons_0025uta.LCMutator"),
+    "iAS": Mode(20, 0, "LeagueAS-SP.iAS"),
+    "ZPiAS": Mode(20, 0, "ZeroPingPlus103.ColorAccuGib")
 }
 
 RED_PASSWORD_PREFIX = 'RP'
@@ -451,14 +451,14 @@ class PugTeams(Players):
     #########################################################################################
     def removePugTeamPlayer(self, player):
         if player in self:
-            if self.red:
+            if self.red or self.blue:
                 self.softPugTeamReset()
             self.removePlayer(player)
             return True
         return False
 
     def softPugTeamReset(self):
-        if self.red:
+        if self.red or self.blue:
             self.players += self.red + self.blue
             self.players = list(filter(None, self.players))
             self.red.clear()
@@ -1171,7 +1171,7 @@ class AssaultPug(PugTeams):
             ## ProAS and iAS are played with a different maximum number of players.
             ## Can't change mode from std to pro/ias if more than the maximum number of players allowed for these modes are signed.
             if mode.upper() != "STDAS" and mode.upper() != "LCAS" and len(self.players) > MODE_CONFIG[mode].maxPlayers:
-                return False, str(MODE_CONFIG[mode].maxPlayers) + " or less players must be signed for a switch to " + mode
+                return False, str(MODE_CONFIG[mode].maxPlayers) + " or fewer players must be signed for a switch to " + mode
             else:
                 ## If max players is more than mode max and there aren't more than mode max players signed, automatically reduce max players to mode max.
                 if mode.upper() != "STDAS" and mode.upper() != "LCAS" and self.maxPlayers > MODE_CONFIG[mode].maxPlayers:
