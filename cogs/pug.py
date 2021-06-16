@@ -1320,7 +1320,7 @@ class PUG(commands.Cog):
                 info['pug']['current']['maxmaps'] = self.pugInfo.maps.maxMaps
                 if len(self.pugInfo.players) > 0:
                     info['pug']['current']['signed'] = []
-                    for p in self.pugInfo.players:
+                    for p in filter(None, self.pugInfo.players):
                         info['pug']['current']['signed'].append(p.id)
                 # last pug info:
                 info['pug']['lastpug'] = {}
