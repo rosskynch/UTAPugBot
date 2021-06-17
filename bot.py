@@ -1,8 +1,10 @@
 from discord.ext import commands
 import discord
 import json
+import os
 import logging
 import sys
+from datetime import datetime
 import traceback
 
 # Intents required to work with the discord API (updated October 2020)
@@ -12,12 +14,31 @@ description = 'Discord Assault PUG Bot'
 
 extensions = ['cogs.admin', 'cogs.info', 'cogs.pug']
 
-discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.CRITICAL)
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
-log.addHandler(handler)
+#########################################################################################
+# Logging
+#########################################################################################
+def setupLogging(name):
+    formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+    logfilename = 'log//{0}-{1}.log'.format(name,datetime.now().strftime("%Y-%m-%d"))
+    os.makedirs(os.path.dirname(logfilename), exist_ok=True)
+    handler = logging.FileHandler(filename=logfilename, encoding='utf-8', mode='w')
+    handler.setFormatter(formatter)
+    handler.setLevel(logging.DEBUG)
+
+    screen_handler = logging.StreamHandler(stream=sys.stdout)
+    screen_handler.setFormatter(formatter)
+    screen_handler.setLevel(logging.INFO)
+    logger = logging.getLogger(name)
+    logger.addHandler(handler)
+    logger.addHandler(screen_handler)
+    return logger
+
+log = setupLogging('bot')
+
+#########################################################################################
+# Bot 
+#########################################################################################
 
 help_attrs = dict(hidden=True)
 bot = commands.Bot(
@@ -29,21 +50,19 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print('Logged in as:')
-    print('Username: ' + bot.user.name)
-    print('ID: ' + str(bot.user.id))
+    log.info('Logged in as: Username- {0} ; ID- {1}'.format(bot.user.name,str(bot.user.id)))
     
     # Load extensions after bot is logged to ensure commands which require an active connection work.
     for extension in extensions:
         try:
             bot.load_extension(extension)
         except Exception as e:
-            print('Failed to load extension {}\n{}: {}'.format(
+            log.error('Failed to load extension {}\n{}: {}'.format(
                 extension, type(e).__name__, e))
 
 @bot.event
 async def on_resumed():
-    print('resumed...')
+    log.debug('Resumed...')
 
 @bot.event
 async def on_command(context):
@@ -64,9 +83,9 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.DisabledCommand):
         await ctx.send('This command is disabled and cannot be used.')
     elif isinstance(error, commands.CommandInvokeError):
-        print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
+        log.error('In {0.command.qualified_name}:'.format(ctx))
         traceback.print_tb(error.original.__traceback__)
-        print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
+        log.error('{0.__class__.__name__}: {0}'.format(error.original))
 
 @bot.event
 async def on_message(message):

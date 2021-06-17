@@ -4,6 +4,9 @@ import asyncpg
 from datetime import datetime
 import functools
 import itertools
+import os
+import logging
+import sys
 import random
 import re
 import requests # should replace with aiohttp. See https://discordpy.readthedocs.io/en/latest/faq.html#what-does-blocking-mean
@@ -110,6 +113,29 @@ DISCORD_MD_ESCAPE_RE = re.compile('[{}]'.format(DISCORD_MD_CHARS))
 DISCORD_MD_ESCAPE_DICT = {c: '\\' + c for c in DISCORD_MD_CHARS}
 
 #########################################################################################
+# Logging
+#########################################################################################
+def setupPugLogging(name):
+    formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+    logfilename = 'log//{0}-{1}.log'.format(name,datetime.now().strftime("%Y-%m-%d"))
+    os.makedirs(os.path.dirname(logfilename), exist_ok=True)
+    handler = logging.FileHandler(filename=logfilename, encoding='utf-8', mode='w')
+    handler.setFormatter(formatter)
+    handler.setLevel(logging.DEBUG)
+
+    screen_handler = logging.StreamHandler(stream=sys.stdout)
+    screen_handler.setFormatter(formatter)
+    screen_handler.setLevel(logging.DEBUG)
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    logger.addHandler(screen_handler)
+    return logger
+
+log = setupPugLogging('pugbot')
+log.info('Extension loaded with logging...')
+#########################################################################################
 # Utilities
 #########################################################################################
 
@@ -121,7 +147,7 @@ def discord_md_escape(value):
 def display_name(member):
     return discord_md_escape(member.display_name)
 
-def getDuration(then, now, interval = "default"):
+def getDuration(then, now, interval: str = 'default'):
     # Adapted from https://stackoverflow.com/a/47207182
     duration = now - then
     duration_in_s = duration.total_seconds()
@@ -376,13 +402,13 @@ class Team(list):
         if len(self):
             return self[0]
         return None
-
+   
 #########################################################################################
 # CLASS
 #########################################################################################
 class PugTeams(Players):
     """Represents players who can be divided into 2 teams who captains pick."""
-    def __init__(self, maxPlayers, pickMode):
+    def __init__(self, maxPlayers: int, pickMode: int):
         super().__init__(maxPlayers)
         self.teams = (Team(), Team())
         self.pickMode = pickMode
@@ -518,10 +544,12 @@ class PugTeams(Players):
 # CLASS
 #########################################################################################
 class GameServer:
-    def __init__(self, configFile=DEFAULT_CONFIG_FILE):
+    def __init__(self, configFile=DEFAULT_CONFIG_FILE, parent=None):
         # Initialise the class with hardcoded defaults, then parse in JSON config
+        self.parent = parent
         self.configFile = configFile
         self.configMaps = []
+
         # All servers
         self.allServers = DEFAULT_SERVER_LIST
         
@@ -529,12 +557,15 @@ class GameServer:
         self.postServer = DEFAULT_POST_SERVER
         self.authtoken = DEFAULT_POST_TOKEN
 
-        # Chosen game server deetails
+        # Chosen game server details
         self.gameServerRef = DEFAULT_GAME_SERVER_REF
         self.gameServerIP = DEFAULT_GAME_SERVER_IP
         self.gameServerPort = DEFAULT_GAME_SERVER_PORT
         self.gameServerName = DEFAUlT_GAME_SERVER_NAME
-        
+        self.gameServerState = ""
+        self.gameServerOnDemand = False
+        self.gameServerOnDemandReady = True
+
         # Setup details
         self.redPassword = DEFAULT_RED_PASSWORD
         self.bluePassword = DEFAULT_BLUE_PASSWORD
@@ -571,23 +602,27 @@ class GameServer:
                     if 'authtoken' in setupapi:
                         self.authtoken = info['setupapi']['authtoken']
                 else:
-                    print('setupapi not found in config file.')
+                    log.warn('setupapi not found in config file.')
                 if 'maplist' in info and len(info['maplist']):
-                    print('Loaded {0} maps from config.json'.format(len(info['maplist'])))
+                    log.info('Loaded {0} maps from config.json'.format(len(info['maplist'])))
                     self.configMaps = info['maplist']
                 else:
-                    print('Maplist not found in config file.')
+                    log.warn('Maplist not found in config file.')
 
                 # Iterate through local cache of servers, and set the default if present
                 if 'serverlist' in info and len(info['serverlist']):
                     for server in info['serverlist']:
-                        self.updateServerReference(server['serverref'],server['servername'])
+                        if 'serverondemand' in server.keys() and server['serverondemand']==True:
+                            ondemand = True
+                        else:
+                            ondemand = False
+                        self.updateServerReference(server['serverref'],server['servername'],'',ondemand)
                         if 'serverdefault' in server.keys():
                             self.gameServerRef = server['serverref']
                 else:
-                    print('Serverlist not found in config file.')
+                    log.warn('Serverlist not found in config file.')
             else:
-                print("GameServer: Config file could not be loaded: {0}".format(configFile))
+                log.error("GameServer: Config file could not be loaded: {0}".format(configFile))
             f.close()
         return True
 
@@ -613,8 +648,10 @@ class GameServer:
                 for s in self.allServers:
                     # allServers[x][0] = server ref
                     # allServers[x][1] = server name
-                    # allServers[x][3] = server url
-                    serverinfo = {"serverref": s[0], "servername": s[1], "serverurl": s[2]}
+                    # allServers[x][2] = server url
+                    # allServers[x][3] = on-demand server (bool)
+                    # allServers[x][4] = last state (e.g. OPEN - PUBLIC, N/A)
+                    serverinfo = {"serverref": s[0], "servername": s[1], "serverurl": s[2], "serverondemand": s[3]}
                     if s[0] == self.gameServerRef:
                         serverinfo["serverdefault"] = True
                     info['serverlist'].append(serverinfo)
@@ -623,7 +660,7 @@ class GameServer:
             json.dump(info, f, indent=4)
             f.close()
         return True
-
+    
     #########################################################################################
     # Formatted JSON
     #########################################################################################
@@ -631,7 +668,9 @@ class GameServer:
     def format_post_header_auth(self):
         fmt = {
                 "Content-Type": "application/json; charset=UTF-8",
-                "PugAuth": '{}'.format(self.authtoken)
+                "PugAuth": '{}'.format(self.authtoken),
+                "Accept":"*/*",
+                "Accept-Encoding":"gzip, deflate, br"
         }
         return fmt
 
@@ -658,14 +697,21 @@ class GameServer:
         fmt = self.format_post_header_auth
         fmt.update({"Mode": "endgame"})
         return fmt
+    
+    def format_post_header_control(self, state: str = 'start'):
+        fmt = self.format_post_header_auth
+        fmt.update({"Mode": "remote{0}".format(state)})
+        return fmt
 
-    def format_post_body_serverref(self):
+    def format_post_body_serverref(self, serverref: str = ''):
+        if len(serverref) == 0:
+            serverref = self.gameServerRef
         fmt = {
-            "server": self.gameServerRef
+            "server": serverref
         }
         return fmt
 
-    def format_post_body_setup(self, numPlayers, maps, mode):
+    def format_post_body_setup(self, numPlayers: int, maps, mode: str):
         fmt = {
             "server": self.gameServerRef,
             "authEnabled": True,
@@ -737,6 +783,10 @@ class GameServer:
         return '{0}{1}{2}'.format(self.format_gameServerURL, '?password=', self.spectatorPassword)
 
     @property
+    def format_gameServerState(self):
+        return '{0}'.format(self.gameServerState)
+
+    @property
     def format_server_info(self):
         fmt = '{0} | {1}'.format(self.gameServerName, self.format_gameServerURL)
         return fmt
@@ -785,7 +835,7 @@ class GameServer:
     #########################################################################################
     # Functions:
     ######################################################################################### 
-    def makePostRequest(self, server, headers, json=None):
+    def makePostRequest(self, server: str, headers, json=None):
         if json:
             try:
                 r = requests.post(server, headers=headers, json=json)
@@ -803,18 +853,22 @@ class GameServer:
             self.allServers.pop(self.current_serverrefs().index(serverref))
             return True
         return False
-
-    def updateServerReference(self, serverref: str, serverdesc: str, serverurl: str = ''):
+    
+    def updateServerReference(self, serverref: str, serverdesc: str, serverurl: str = '', serverondemand: bool = False, serverlaststatus: str = ''):
         if serverref in self.current_serverrefs() and serverref not in [None, '']:
             self.allServers.pop(self.current_serverrefs().index(serverref))
-        self.allServers.append((serverref, serverdesc, serverurl))
+        self.allServers.append((serverref, serverdesc, serverurl,serverondemand,serverlaststatus))
         return True
     
-    def useServer(self, index: int):
+    def useServer(self, index: int, autostart: bool = False):
         """Sets the active server"""
         if index >= 0 and index < len(self.allServers):
             self.gameServerRef = self.allServers[index][0]
-            self.updateServerStatus()
+            self.gameServerOnDemand = self.allServers[index][3]
+            if autostart and self.gameServerOnDemand:
+                self.controlOnDemandServer('start')
+            else:
+                self.updateServerStatus()
             self.saveServerConfig(self.configFile)
             return True
         return False
@@ -825,20 +879,26 @@ class GameServer:
         self.redPassword = RED_PASSWORD_PREFIX + str(random.randint(0, 999))
         self.bluePassword = BLUE_PASSWORD_PREFIX + str(random.randint(0, 999))
 
-    def getServerList(self, restrict: bool = False, delay: int = 0, allservers: bool = True):
+    def getServerList(self, restrict: bool = False, delay: int = 0, listall: bool = True):
         if restrict and (datetime.now() - self.lastUpdateTime).total_seconds() < delay:
             # 5 second delay between requests when restricted.
             return None
-
-        if allservers:
+        log.debug('Sending API request, fetching server list...')
+        if listall:
             r = self.makePostRequest(self.postServer, self.format_post_header_list)
         else:
             body = self.format_post_body_serverref()
             r = self.makePostRequest(self.postServer, self.format_post_header_list, body)
-
+       
         self.lastUpdateTime = datetime.now()
         if(r):            
-            return r.json()
+            try:
+                validatedJSON = r.json()
+                log.debug('API response validated.')
+                return validatedJSON
+            except:
+                log.error('Invalid JSON returned from server, URL: {0} HTTP reponse: {1}; content:{2}'.format(r.url,r.status_code,r.content))
+                return None
         else:
             return None
 
@@ -856,10 +916,11 @@ class GameServer:
 
                 if serverDefaultPresent:
                     # Default is present and working, re-iterate through list and populate local var
+                    # Populate only those either online now, or that are "cloudManaged" on-demand servers
                     self.allServers = []
                     for sv in info:
-                        if sv['serverStatus']['Summary'] not in [None, '', 'N/A', 'N/AN/A']:
-                            self.updateServerReference(sv['serverRef'], sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'], sv['serverPort']))
+                        if sv['cloudManaged'] == True or sv['serverStatus']['Summary'] not in [None, '', 'N/A', 'N/AN/A']:
+                            self.updateServerReference(sv['serverRef'], sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'], sv['serverPort']), sv['cloudManaged'], sv['serverStatus']['Summary'])
 
                 # Write the server config:
                 self.saveServerConfig(self.configFile)
@@ -874,29 +935,98 @@ class GameServer:
             # 5 second delay between requests when restricted.
             return None
         body = self.format_post_body_serverref()
+        log.debug('Posting "Check" to API {0} - {1}'.format(self.postServer,body))
         r = self.makePostRequest(self.postServer, self.format_post_header_check, body)
+        log.debug('Received data from API - Status: {0}; Content-Length: {1}'.format(r.status_code,r.headers['content-length']))
         self.lastUpdateTime = datetime.now()
         if(r):
             return r.json()
         else:
             return None
 
-    def updateServerStatus(self):
+    def updateServerStatus(self, ignorematchStarted: bool = False):
+        log.debug('Running updateServerStatus')
         info = self.getServerStatus()
+        log.debug('updateServerStatus - info fetched')
         if info:
             self.gameServerName = info["serverName"]
             self.gameServerIP = info["serverAddr"]
             self.gameServerPort = info["serverPort"]
-            if not self.endMatchPerformed:
+            self.gameServerOnDemand = info["cloudManaged"]
+            self.gameServerOnDemandReady = True
+            self.gameServerState = info['serverStatus']['Summary']
+            self.matchInProgress = False
+            if not self.endMatchPerformed and ignorematchStarted==False:
                 self.matchInProgress = info["matchStarted"]
             self.lastSetupResult = info["setupResult"]
             self.lastCheckJSON = info
             return True
         self.lastSetupResult = 'Failed'
         return False
+    
+    def controlOnDemandServer(self, state: str = 'start', serverref: str = ''):
+        if len(serverref)==0:
+            serverref = self.gameServerRef
+        log.debug('Running controlOnDemandServer-{0} for {1}...'.format(state,serverref))
+        if state not in [None, 'stop','halt','shutdown']:
+            if not self.updateServerStatus(True): # or self.matchInProgress:
+                return None
+
+        headers = self.format_post_header_control(state)
+        body = self.format_post_body_serverref(serverref)
+        log.debug('Posting "Remote{0}" to API {1} - {2}'.format(state,self.postServer,body))
+        r = self.makePostRequest(self.postServer, headers, body)
+        log.debug('Received data from API - Status: {0}; Content-Length: {1}'.format(r.status_code,r.headers['content-length']))
+        if(r):
+            log.debug('controlOnDemandServer-{0} returned JSON info...'.format(state))
+            info = r.json()
+            return info
+        else:
+            log.error('controlOnDemandServer-{0} failed.'.format(state))
+        return None
+
+    def stopOnDemandServer(self, index: int):
+        log.debug('Running stopOnDemandServer...')
+        if index >= 0 and index < len(self.allServers):
+            if self.allServers[index][3]==True:
+                self.controlOnDemandServer('stop',self.allServers[index][0])
+                log.debug('stopOnDemandServer - Control command issued.')
+                return True
+        log.debug('stopOnDemandServer - Invalid server selected.')
+        return False
 
     def setupMatch(self, numPlayers, maps, mode):
-        if not self.updateServerStatus() or self.matchInProgress:
+        if self.matchInProgress:
+            return False
+
+        # Start the looped task which checks whether the server is ready
+        if self.gameServerOnDemand:
+            self.gameServerOnDemandReady = False
+            # TODO - Unblock thread and move setup and checks to background
+            #      - Lots of re-work required for this
+
+            # log.debug('Starting Server state checker...')
+            # self.updateOnDemandServerState.start(ctx, log, False)
+            # log.debug('Server state checker started.')
+        else:
+            self.gameServerOnDemandReady = True
+
+        i = 0
+        while self.gameServerOnDemandReady==False:
+            log.debug('Waiting for gameServerOnDemandReady...')
+            if i < 5:
+                self.controlOnDemandServer('start')
+            else:
+                if self.parent.gameServer.updateServerStatus():
+                    self.gameServerOnDemandReady=True
+                else:
+                    time.sleep(5);
+            i+=1
+            if i > 12:
+               # Stop trying after a minute
+               self.gameServerOnDemandReady=True # fail the setup instead, and allow for manual retry.
+
+        if not self.gameServerOnDemandReady:
             return False
 
         self.generatePasswords()
@@ -949,6 +1079,34 @@ class GameServer:
             return self.endMatch()
         return False
 
+    def waitUntilServerStarted(self):
+
+        return True
+
+    #########################################################################################
+    # Loops
+    #########################################################################################
+    @tasks.loop(seconds=15.0, count=8)
+    async def updateOnDemandServerState(self, ctx):
+        log.debug('Checking on-demand server state...')
+        if self.parent.gameServer.updateServerStatus():
+            serverOnline=True
+        else:
+            serverOnline=False
+
+        if serverOnline:
+            log.info('Server online.')
+            self.gameServerOnDemandReady = True
+            await ctx.send('{0} is ready for action.'.format(self.parent.gameServer.gameServerName))
+            self.updateOnDemandServerState.cancel()
+        else:
+            log.warn('Server not yet online.')
+    
+    @updateOnDemandServerState.after_loop
+    async def on_updateOnDemandServerState_cancel():
+        # Assume after loop completion that the servers is ready, and fall back to pug setup to confirm
+        self.gameServerOnDemandReady = True
+
 #########################################################################################
 # CLASS
 #########################################################################################
@@ -959,7 +1117,7 @@ class AssaultPug(PugTeams):
         self.name = 'Assault'
         self.mode = 'stdAS'
         self.desc = self.name + ': ' + self.mode + ' PUG'
-        self.servers = [GameServer(configFile)]
+        self.servers = [GameServer(configFile,self)]
         self.serverIndex = 0
         self.maps = PugMaps(numMaps, pickModeMaps, self.servers[self.serverIndex].configMaps)
 
@@ -1022,26 +1180,26 @@ class AssaultPug(PugTeams):
     #########################################################################################
     # Formatted strings:
     #########################################################################################
-    def format_players(self, players, number=False, mention=False):
+    def format_players(self, players, number: bool = False, mention: bool = False):
         def name(p):
             return p.mention if mention else display_name(p)
         numberedPlayers = ((i, name(p)) for i, p in enumerate(players, 1) if p)
         fmt = '**{0})** {1}' if number else '{1}'
         return PLASEP.join(fmt.format(*x) for x in numberedPlayers)
 
-    def format_all_players(self, number=False, mention=False):
+    def format_all_players(self, number: bool = False, mention: bool = False):
         return self.format_players(self.all, number=number, mention=mention)
 
-    def format_remaining_players(self, number=False, mention=False):
+    def format_remaining_players(self, number: bool = False, mention: bool = False):
         return self.format_players(self.players, number=number, mention=mention)
 
-    def format_red_players(self, number=False, mention=False):
+    def format_red_players(self, number: bool = False, mention: bool = False):
         return self.format_players(self.red, number=number, mention=mention)
 
-    def format_blue_players(self, number=False, mention=False):
+    def format_blue_players(self, number: bool = False, mention: bool = False):
         return self.format_players(self.blue, number=number, mention=mention)
 
-    def format_teams(self, number=False, mention=False):
+    def format_teams(self, number: bool = False, mention: bool = False):
         teamsStr = '**Red Team:** {}\n**Blue Team:** {}'
         red = self.format_red_players(number=number, mention=mention)
         blue = self.format_blue_players(number=number, mention=mention)
@@ -1108,7 +1266,7 @@ class AssaultPug(PugTeams):
         except:
             return False
 
-    def removeServer(self, index):
+    def removeServer(self, index: int):
         if index >= 0 and index < len(self.servers):
             self.servers.pop(index)
             if self.serverIndex == index and len(self.servers) > 0:
@@ -1133,7 +1291,6 @@ class AssaultPug(PugTeams):
             result = False
             for x in range(0, 5):
                 result = self.gameServer.setupMatch(self.maxPlayers, self.maps.maps, self.mode)
-
                 if not result:
                     time.sleep(5)
                 else:
@@ -1162,7 +1319,7 @@ class AssaultPug(PugTeams):
         self.pugLocked = False
         return True
 
-    def setMode(self, mode):
+    def setMode(self, mode: str):
         # Dictionaries are case sensitive, so we'll do a map first to test case-insensitive input, then find the actual key after
         if mode.upper() in map(str.upper, MODE_CONFIG):
             ## Iterate through the keys to find the actual case-insensitive mode
@@ -1235,23 +1392,24 @@ class PUG(commands.Cog):
     @tasks.loop(seconds=60.0)
     async def updateGameServer(self):
         if self.pugInfo.pugLocked:
-            print('Updating game server...\n')
+            log.info('Updating game server [pugLocked=True]..')
             if not self.pugInfo.gameServer.updateServerStatus():
-                print('Cannot contact game server.\n')
+                log.warn('Cannot contact game server.')
             if self.pugInfo.gameServer.processMatchFinished():
                 await self.activeChannel.send('Match finished. Resetting pug...')
                 if self.pugInfo.resetPug():
                     await self.activeChannel.send(self.pugInfo.format_pug())
-                    print('Match over.')
+                    log.info('Match over.')
                     return
                 await self.activeChannel.send('Reset failed.')
-                print('Reset failed')
+                log.error('Reset failed')
 
     @updateGameServer.before_loop
     async def before_updateGameServer(self):
-        print('Waiting before updating game server...')
+        log.info('Waiting before updating game server...')
         await self.bot.wait_until_ready()
-        print('Ready.')
+        log.info('Ready.')
+
 
 #########################################################################################
 # Utilities.
@@ -1263,7 +1421,7 @@ class PUG(commands.Cog):
                 if 'pug' in info and 'activechannelid' in info['pug']:
                     channelID = info['pug']['activechannelid']
                     channel = discord.Client.get_channel(self.bot, channelID)
-                    print("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
+                    log.info("Loaded active channel id: {0} => channel: {1}".format(channelID, channel))
                     if channel:
                         self.activeChannel = channel
                         # Only load current info if the channel is valid, otherwise the rest is useless.
@@ -1294,9 +1452,9 @@ class PUG(commands.Cog):
                                     except:
                                         self.pugInfo.lastPugTimeStarted = None
                     else:
-                        print("No active channel id found in config file.")
+                        log.warn("No active channel id found in config file.")
             else:
-                print("PUG: Config file could not be loaded: {0}".format(configFile))
+                log.error("PUG: Config file could not be loaded: {0}".format(configFile))
             f.close()
         return True
 
@@ -1320,8 +1478,14 @@ class PUG(commands.Cog):
                 info['pug']['current']['maxmaps'] = self.pugInfo.maps.maxMaps
                 if len(self.pugInfo.players) > 0:
                     info['pug']['current']['signed'] = []
-                    for p in filter(None, self.pugInfo.players):
-                        info['pug']['current']['signed'].append(p.id)
+                    for p in self.pugInfo.all:
+                        if (p not in [None]):
+                            info['pug']['current']['signed'].append(p.id)
+                if len(self.pugInfo.captainsFull) > 0:
+                    info['pug']['current']['captains'] = []
+                    for p in self.pugInfo.captainsFull:
+                        if (p not in [None]):
+                            info['pug']['current']['captains'].append(p.id)
                 # last pug info:
                 info['pug']['lastpug'] = {}
                 if self.pugInfo.lastPugTimeStarted:
@@ -1336,11 +1500,11 @@ class PUG(commands.Cog):
     # Formatted strings:
     #########################################################################################
 
-    def format_pick_next_player(self, mention=False):
+    def format_pick_next_player(self, mention: bool = False):
         player = self.pugInfo.currentCaptainToPickPlayer
         return '{} to pick next player (**!pick <number>**)'.format(player.mention if mention else display_name(player))
 
-    def format_pick_next_map(self, mention=False):
+    def format_pick_next_map(self, mention: bool = False):
         player = self.pugInfo.currentCaptainToPickMap
         return '{} to pick next map (use **!map <number>** to pick and **!listmaps** to view available maps)'.format(player.mention if mention else display_name(player))
 
@@ -1362,6 +1526,19 @@ class PUG(commands.Cog):
 
     def isActiveChannel(self, ctx):
         return self.activeChannel is not None and self.activeChannel == ctx.message.channel
+    
+    async def checkOnDemandServer(self, ctx):
+        if self.pugInfo.gameServer.gameServerState in ('N/A','N/AN/A') and self.pugInfo.gameServer.gameServerOnDemand == True:
+            await ctx.send('Starting on-demand server: {0}...'.format(self.pugInfo.gameServer.gameServerName))
+            info = self.pugInfo.gameServer.controlOnDemandServer('start')
+            if (info):
+                log.info('On-demand server start {0} returned: {1}'.format(self.pugInfo.gameServer.gameServerName,info["cloudManagementResponse"]))
+                return True
+            else:
+                log.error('Failed to start on-demand server: {0}'.format(self.pugInfo.gameServer.gameServerName))
+                await ctx.send('Failed to start on-demand server: {0}. Select another server before completing map selection.'.format(self.pugInfo.gameServer.gameServerName))
+                return False
+        return True
 
     async def processPugStatus(self, ctx):
         # Big function to test which stage of setup we're at:
@@ -1372,15 +1549,14 @@ class PUG(commands.Cog):
         # Work backwards from match ready.
         # Note match is ready once players are full, captains picked, players picked and maps picked.
         if self.pugInfo.mapsReady and self.pugInfo.matchReady:
+            if self.pugInfo.gameServer.gameServerOnDemand and not self.pugInfo.gameServer.gameServerOnDemandReady:
+                await ctx.send('Waiting for {0} to be ready for action...'.format(self.parent.gameServer.gameServerName))
             if self.pugInfo.setupPug():
                 await self.sendPasswordsToTeams()
                 await ctx.send(self.pugInfo.format_match_is_ready)
                 self.resetRequest = resetRequest(False, False) # only need to reset this here because we only care about this when a match is in progress.
             else:
-                msg = ['**PUG Setup Failed**. Try again or contact an admin.']
-                msg.append('Resetting...')
-                await ctx.send('\n'.join(msg))
-                self.pugInfo.resetPug()
+                await ctx.send('**PUG Setup Failed**. Use **!retry** to attempt setting up again with current configuration, or **!reset** to start again from the beginning.')
             return
 
         if self.pugInfo.teamsReady:
@@ -1399,6 +1575,8 @@ class PUG(commands.Cog):
                 self.pugInfo.format_teams(),
                 self.format_pick_next_player(mention=True)])
             await ctx.send(msg)
+            # Check server state and fire a start-up command if needed
+            await self.checkOnDemandServer(ctx)
             return
         
         if self.pugInfo.numCaptains == 1:
@@ -1414,7 +1592,9 @@ class PUG(commands.Cog):
                 self.pugInfo.setCaptain(self.pugInfo.players[0])
                 self.pugInfo.setCaptain(self.pugInfo.players[1])
                 await ctx.send('Teams have been automatically filled.\n{}'.format(self.pugInfo.format_teams(mention=True)))
-                await self.processPugStatus(ctx)
+                await ctx.send(self.format_pick_next_map(mention=False))
+                # Check server state and fire a start-up command if needed
+                await self.checkOnDemandServer(ctx)
                 return
 
             # Standard case, moving to captain selection.
@@ -1448,6 +1628,8 @@ class PUG(commands.Cog):
         if not self.isActiveChannel(ctx):
             return False
         if warn and self.pugInfo.pugLocked:
+            log.warn('Pug is in progress')
+            await ctx.send('Warning: Pug is in progress.')
             raise PugIsInProgress("Pug In Progress")
         return not self.pugInfo.pugLocked
 
@@ -1509,13 +1691,40 @@ class PUG(commands.Cog):
     async def adminsetserver(self, ctx, idx: int):
         """Sets the active server to the index chosen from the pool of available servers. Admin only"""
         svindex = idx - 1 # offset as users see them 1-based index.
-        if self.pugInfo.gameServer.useServer(svindex):
+        if self.pugInfo.gameServer.useServer(svindex,self.pugInfo.captainsReady): # auto start eligible servers when caps are ready
             await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
+            if self.pugInfo.gameServer.gameServerState in ('N/A','N/AN/A'):
+                # Check whether server is being changed when captains are already ready
+                if not self.pugInfo.captainsReady:
+                    await ctx.send('Server is currently offline, but will be fired up upon Captains being selected.')
 
-            # Bit of a hack to get around the problem of a match being in progress when this is initialised.
+            # Bit of a hack to get around the problem of a match being in progress when this is initialised. - TODO consider off state too
             # Will improve this later.
             if self.pugInfo.gameServer.lastSetupResult == 'Match In Progress':
                 self.pugLocked = True
+        else:
+            await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
+    
+    @commands.command(aliases=['startserver'])
+    @commands.check(admin.hasManagerRole_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminstartserver(self, ctx, idx: int):
+        """Starts up an on-demand server. Admin only"""
+        svindex = idx - 1 # offset as users see them 1-based index.
+        if self.pugInfo.gameServer.useServer(svindex,True):
+            await ctx.send('**{0}** is starting up (allow up to 60s).'.format(self.pugInfo.gameServer.gameServerName))
+        else:
+            await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
+
+    @commands.command(aliases=['stopserver'])
+    @commands.check(admin.hasManagerRole_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminstopserver(self, ctx, idx: int):
+        """Queues up an on-demand server to shut down. Admin only"""
+        svindex = idx - 1 # offset as users see them 1-based index.
+        if self.pugInfo.gameServer.stopOnDemandServer(svindex):
+            if len(self.pugInfo.gameServer.allServers[svindex][1]) > 0:
+                await ctx.send('**{0}** is queued for shut-down.'.format(self.pugInfo.gameServer.allServers[svindex][1]))
         else:
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
 
@@ -1696,7 +1905,7 @@ class PUG(commands.Cog):
         """Displays Pug server info"""
         await ctx.send(self.pugInfo.gameServer.format_game_server)
 
-    @commands.command()
+    @commands.command(aliases = ['serverquery','serverinfo'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def serverstatus(self, ctx):
@@ -1788,8 +1997,23 @@ class PUG(commands.Cog):
                 await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
         else:
             await ctx.send('Reset failed. Please, try again or inform an admin.')
+    
+    @commands.command(aliases=['replay'])
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    async def retry(self, ctx):
+        if self.pugInfo.gameServer.matchInProgress==False or self.pugInfo.gameServer.gameServerOnDemand:
+            retryAllowed = True
+        else:
+            retryAllowed = False
 
-    @commands.command()
+        if self.pugInfo.playersFull and self.pugInfo.mapsReady and self.pugInfo.matchReady and retryAllowed:
+            await self.processPugStatus(ctx)
+        else:
+            # TODO: Recall saved data from last match and play it back into the bot
+            await ctx.send('Retry can only be utilised after a failed setup.')
+
+    @commands.command(aliases=['resetcaps','resetcap'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
