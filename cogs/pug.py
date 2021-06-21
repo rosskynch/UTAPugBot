@@ -1304,7 +1304,7 @@ class AssaultPug(PugTeams):
             fmt = []
             fmt.append('Last **{}** ({} ago)'.format(self.desc, '{}'))
             fmt.append(self.format_teams())
-            fmt.append('Maps:\n{}'.format(self.maps.format_current_maplist))
+            fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
             self.lastPugStr = '\n'.join(fmt)
             self.lastPugTimeStarted = datetime.now()
             return True
@@ -1514,7 +1514,7 @@ class PUG(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        if error is PugIsInProgress:
+        if type(error) is PugIsInProgress:
             # To handle messages returned when disabled commands are used when pug is already in progress.
             msg = ['Match is currently in progress.']
             if ctx.message.author in self.pugInfo:
@@ -1628,8 +1628,7 @@ class PUG(commands.Cog):
         if not self.isActiveChannel(ctx):
             return False
         if warn and self.pugInfo.pugLocked:
-            log.warn('Pug is in progress')
-            await ctx.send('Warning: Pug is in progress.')
+            log.warn('Raising PugIsInProgress')
             raise PugIsInProgress("Pug In Progress")
         return not self.pugInfo.pugLocked
 
