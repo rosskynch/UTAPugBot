@@ -1045,7 +1045,7 @@ class GameServer:
             self.redPassword = info['setupConfig']['redPass']
             self.bluePassword = info['setupConfig']['bluePass']
             self.spectatorPassword = info['setupConfig']['specPass']
-
+            
             return self.lastSetupResult == 'Completed'
 
         self.matchInProgress = False
@@ -1166,7 +1166,7 @@ class AssaultPug(PugTeams):
 
     @property
     def matchReady(self):
-        if self.teamsFull and self.maps.mapsFull:
+        if self.playersReady and self.teamsReady and self.mapsReady:
             return True
         return False
 
@@ -2001,12 +2001,12 @@ class PUG(commands.Cog):
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def retry(self, ctx):
-        if self.pugInfo.gameServer.matchInProgress==False or self.pugInfo.gameServer.gameServerOnDemand:
+        if self.pugInfo.gameServer.matchInProgress == False or self.pugInfo.gameServer.gameServerOnDemand:
             retryAllowed = True
         else:
             retryAllowed = False
 
-        if self.pugInfo.playersFull and self.pugInfo.mapsReady and self.pugInfo.matchReady and retryAllowed:
+        if self.pugInfo.matchReady and retryAllowed:
             await self.processPugStatus(ctx)
         else:
             # TODO: Recall saved data from last match and play it back into the bot
