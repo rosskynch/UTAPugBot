@@ -1976,13 +1976,13 @@ class PUG(commands.Cog):
         if (admin.hasManagerRole_Check(ctx) or not(self.pugInfo.pugLocked or (self.pugInfo.gameServer and self.pugInfo.gameServer.matchInProgress))):
             reset = True
         else:
-            if ctx.author in self.pugInfo.red:
+            if ctx.message.author in self.pugInfo.red:
                 if self.resetRequest.red:
                     await ctx.send('Red team have already requested reset. Blue team must also request.')
                 else:
                     self.resetRequest.red = True
                     await ctx.send('Red team have requested reset. Blue team must also request.')
-            elif ctx.author in self.pugInfo.blue:
+            elif ctx.message.author in self.pugInfo.blue:
                 if self.resetRequest.blue:
                     await ctx.send('Blue team have already requested reset. Red team must also request.')
                 else:
