@@ -139,8 +139,6 @@ log.info('Extension loaded with logging...')
 # Utilities
 #########################################################################################
 
-resetRequest = collections.namedtuple('resetRequest', 'red blue')
-
 def discord_md_escape(value):
     return DISCORD_MD_ESCAPE_RE.sub(lambda match: DISCORD_MD_ESCAPE_DICT[match.group(0)], value)
 
@@ -1374,8 +1372,9 @@ class PUG(commands.Cog):
 
         # Used to keep track of if both teams have requested a reset while a match is in progress.
         # We'll only make use of this in the reset() function so it only needs to be put back to
-        # (False, False) when a new match is setup.
-        self.resetRequest = resetRequest(False, False)
+        # False when a new match is setup.
+        self.resetRequestRed = True
+        self.resetRequestBlue = True
 
         # Start the looped task which checks the server when a pug is in progress (to detect match finished)
         self.updateGameServer.add_exception_type(asyncpg.PostgresConnectionError)
@@ -1554,7 +1553,8 @@ class PUG(commands.Cog):
             if self.pugInfo.setupPug():
                 await self.sendPasswordsToTeams()
                 await ctx.send(self.pugInfo.format_match_is_ready)
-                self.resetRequest = resetRequest(False, False) # only need to reset this here because we only care about this when a match is in progress.
+                self.resetRequestRed = False # only need to reset this here because we only care about this when a match is in progress.
+                self.resetRequestBlue = False # only need to reset this here because we only care about this when a match is in progress.
             else:
                 await ctx.send('**PUG Setup Failed**. Use **!retry** to attempt setting up again with current configuration, or **!reset** to start again from the beginning.')
             return
@@ -1976,27 +1976,30 @@ class PUG(commands.Cog):
         if (admin.hasManagerRole_Check(ctx) or not(self.pugInfo.pugLocked or (self.pugInfo.gameServer and self.pugInfo.gameServer.matchInProgress))):
             reset = True
         else:
-            if ctx.message.author in self.pugInfo.red:
-                if self.resetRequest.red:
+            requester = ctx.message.author
+            if requester in self.pugInfo.red:
+                if self.resetRequestRed:
                     await ctx.send('Red team have already requested reset. Blue team must also request.')
                 else:
-                    self.resetRequest.red = True
+                    self.resetRequestRed = True
                     await ctx.send('Red team have requested reset. Blue team must also request.')
-            elif ctx.message.author in self.pugInfo.blue:
-                if self.resetRequest.blue:
+            elif requester in self.pugInfo.blue:
+                if self.resetRequestBlue:
                     await ctx.send('Blue team have already requested reset. Red team must also request.')
                 else:
-                    self.resetRequest.blue = True
+                    self.resetRequestBlue = True
                     await ctx.send('Blue team have requested reset. Red team must also request.')
-            if self.resetRequest.red and self.resetRequest.blue:
+            else:
+                await ctx.send('Pug is in progress, only players involved the pug or admins can reset.')
+            if self.resetRequestRed and self.resetRequestBlue:
                 reset = True
         if reset:
             await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
             if self.pugInfo.resetPug():
                 await ctx.send('Pug Reset. {}'.format(self.pugInfo.format_pug_short))
-        else:
-            await ctx.send('Reset failed. Please, try again or inform an admin.')
-    
+            else:
+                await ctx.send('Reset failed. Please, try again or inform an admin.')
+
     @commands.command(aliases=['replay'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
@@ -2044,7 +2047,7 @@ class PUG(commands.Cog):
         await ctx.send('{0} was added. {1}'.format(display_name(player), self.pugInfo.format_pug()))
         await self.processPugStatus(ctx)
 
-    @commands.command(aliases=['l'])
+    @commands.command(aliases=['l', 'lva'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
