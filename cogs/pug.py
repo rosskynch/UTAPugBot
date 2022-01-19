@@ -792,16 +792,16 @@ class GameServer:
     @property
     def format_showall_servers(self):
         flags = {
-            'uk':':flag_gb:',
-            'fr':':flag_fr:',
-            'nl':':flag_nl:',
-            'de':':flag_de:',
-            #'se':':flag_se:',
-            #'es':':flag_es:',
-            'it':':flag_it:',
-            'dk':':flag_dk:',
-            'jp':':flag_jp:',
-            'us':':flag_us:'
+            'UK':':flag_gb:',
+            'FR':':flag_fr:',
+            'NL':':flag_nl:',
+            'DE':':flag_de:',
+            'SE':':flag_se:',
+            'ES':':flag_es:',
+            'IT':':flag_it:',
+            'DK':':flag_dk:',
+            'JP':':flag_jp:',
+            'US':':flag_us:'
         }
         msg = []
         i = 0
