@@ -796,8 +796,8 @@ class GameServer:
             'fr':':flag_fr:',
             'nl':':flag_nl:',
             'de':':flag_de:',
-            'se':':flag_se:',
-            'es':':flag_es:',
+            #'se':':flag_se:',
+            #'es':':flag_es:',
             'it':':flag_it:',
             'dk':':flag_dk:',
             'jp':':flag_jp:',
@@ -809,7 +809,7 @@ class GameServer:
             i += 1
             servername = '{0}'.format(s[1])
             for flag in flags:
-                servername  = re.compile(flag, re.IGNORECASE).sub(flags[flag], servername)
+                servername  = re.compile(flag).sub(flags[flag], servername)
             msg.append('{0}. {1} - {2}'.format(i, servername, s[2]))
         return '\n'.join(msg)
 
