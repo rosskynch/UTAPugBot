@@ -685,12 +685,14 @@ class GameServer:
             udpData = []
             while True:
                 if queryType == 'consolelog': # Larger buffer required for consolelog
-                    udpRcv, _ = self.udpSock.recvfrom(16384)
+                    udpRcv, _ = self.udpSock.recvfrom(65536)
                 else:
                     udpRcv, _ = self.udpSock.recvfrom(4096)
                 try:
-                    udpData.extend(udpRcv.decode('utf-8').split('\\')[1:-2]) 
-                except UnicodeDecodeError:
+                    udpData.extend(udpRcv.decode('utf-8','ignore').split('\\')[1:-2]) 
+                except UnicodeDecodeError as e:
+                    log.error('UDP decode error: {0}'.format(e.reason))
+                    log.debug('Attempted sending UDP query {0} to {1}:{2}.'.format(queryType, self.utQueryData['ip'], self.utQueryData['query_port']))
                     return
                 if udpRcv.split(b'\\')[-2] == b'final':
                     break
@@ -699,6 +701,7 @@ class GameServer:
                 self.utQueryData[part[0]] = part[1]
             self.utQueryData['code'] = 200
         except socket.timeout:
+            log.error('UDP socket timeout when connecting to {0}:{1}'.format(self.utQueryData['ip'], self.utQueryData['query_port']))
             self.utQueryData['status'] = 'Timeout connecting to server.'
             self.utQueryData['code'] = 408
 
@@ -1781,7 +1784,7 @@ class PUG(commands.Cog):
         embedInfo = discord.Embed(color=discord.Color.greyple(),title=self.pugInfo.gameServer.format_current_serveralias,description='Waiting for server info...')
         reportToChannel = self.utReporterChannel
         # Send "info" to get basic server details and confirm online
-        if self.pugInfo.gameServer.utQueryServer('info') and reportToChannel != None:
+        if self.pugInfo.gameServer.utQueryServer('info'):
             if 'code' in self.pugInfo.gameServer.utQueryData and self.pugInfo.gameServer.utQueryData['code'] == 200:
                 # Send multi-query request for info
                 if self.pugInfo.gameServer.utQueryServer('status\\\\level_property\\timedilation\\\\game_property\\teamscore\\\\game_property\\teamnamered\\\\game_property\\teamnameblue\\\\player_property\\Health\\\\game_property\\elapsedtime\\\\game_property\\remainingtime\\\\game_property\\bmatchmode\\\\game_property\\friendlyfirescale\\\\game_property\\currentdefender\\\\game_property\\bdefenseset\\\\game_property\\matchcode\\\\rules'):
@@ -1832,15 +1835,12 @@ class PUG(commands.Cog):
                                         player['Ping'] = queryData['ping_{0}'.format(x)]                                                                                            
                                     if 'team_{0}'.format(x) in queryData:
                                         player['TeamId'] = queryData['team_{0}'.format(x)]
-                                    if x == 0:
-                                        summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\t {1}\t {2}'.format(player['Name'].ljust(20),player['Frags'].rjust(5),player['Ping'].rjust(4))
-                                    else:
-                                        summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\n{1}\t {2}\t {3}'.format(summary['PlayerList{0}_data'.format(player['TeamId'])],player['Name'].ljust(20),player['Frags'].rjust(5),player['Ping'].rjust(4))
+                                    summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\n{1}\t {2}\t {3}'.format(summary['PlayerList{0}_data'.format(player['TeamId'])],player['Name'].ljust(20),player['Frags'].rjust(5),player['Ping'].rjust(4))
 
                             for x in range(int(queryData['maxteams'])):
                                 if summary['PlayerList{0}_data'.format(x)] not in ['',None]:
                                     summary['PlayerList{0}'.format(x)] = '```Player Name{0}\t Score\t Ping'.format('\u2800'*8)
-                                    summary['PlayerList{0}'.format(x)] = '{0}\n{1}```'.format(summary['PlayerList{0}'.format(x)],summary['PlayerList{0}_data'.format(x)])
+                                    summary['PlayerList{0}'.format(x)] = '{0}{1}\n```'.format(summary['PlayerList{0}'.format(x)],summary['PlayerList{0}_data'.format(x)])
 
                     # Set basic embed info
                     embedInfo.color = summary['Colour']
