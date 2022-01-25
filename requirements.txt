@@ -9,3 +9,5 @@ requests
 json
 asyncpg
 gitpython
+socket
+dnspython

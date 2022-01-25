@@ -13,6 +13,7 @@ import requests # should replace with aiohttp. See https://discordpy.readthedocs
 import json
 import discord
 import socket
+import dns.resolver
 from discord.ext import commands, tasks
 from cogs import admin
 
@@ -131,8 +132,10 @@ def setupPugLogging(name):
     screen_handler.setLevel(logging.DEBUG)
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
-    logger.addHandler(screen_handler)
+    if not handler in logger.handlers:
+        logger.addHandler(handler)
+    if not screen_handler in logger.handlers:
+        logger.addHandler(screen_handler)
     return logger
 
 log = setupPugLogging('pugbot')
@@ -595,7 +598,7 @@ class GameServer:
         # receive back data into an array. Protocol info: https://wiki.beyondunreal.com/Legacy:UT_Server_Query
         # UTA servers extend the protocol server-side to offer Assault-related info and Event streams (e.g. chat)
         self.udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udpSock.settimeout(5)
+        self.udpSock.settimeout(3)
         self.utQueryStatsActive = False
         self.utQueryReporterActive = False
         self.utQueryConsoleWatermark = self.format_new_watermark
@@ -703,7 +706,7 @@ class GameServer:
             self.utQueryData['code'] = 200
             self.utQueryData['lastquery'] = int(time.time())
         except socket.timeout:
-            log.error('UDP socket timeout when connecting to {0}:{1}'.format(self.utQueryData['ip'], self.utQueryData['query_port']))
+            log.error('UDP socket timeout when connecting to {0}:{1} to perform a query: {2}'.format(self.utQueryData['ip'], self.utQueryData['query_port'],queryType))
             self.utQueryData['status'] = 'Timeout connecting to server.'
             self.utQueryData['code'] = 408
             self.utQueryData['lastquery'] = 0
@@ -1427,11 +1430,14 @@ class PUG(commands.Cog):
     def __init__(self, bot, configFile=DEFAULT_CONFIG_FILE):
         self.bot = bot
         self.activeChannel = None
+        self.customStaticEmojis = {}
+        self.customAnimatedEmojis = {}
         self.utReporterChannel = None
         self.pugInfo = AssaultPug(DEFAULT_PLAYERS, DEFAULT_MAPS, DEFAULT_PICKMODETEAMS, DEFAULT_PICKMODEMAPS, configFile)
         self.configFile = configFile
 
         self.loadPugConfig(configFile)
+        self.cacheGuildEmojis()
 
         # Used to keep track of if both teams have requested a reset while a match is in progress.
         # We'll only make use of this in the reset() function so it only needs to be put back to
@@ -1446,6 +1452,9 @@ class PUG(commands.Cog):
         # Start the GameSpy query loops
         self.updateUTQueryReporter.start()
         self.updateUTQueryStats.start()
+        
+        # Start the Emoji update loop
+        self.updateGuildEmojis.start()
 
         self.lastPokeTime = datetime.now()
 
@@ -1453,6 +1462,7 @@ class PUG(commands.Cog):
         self.updateGameServer.cancel()
         self.updateUTQueryReporter.cancel()
         self.updateUTQueryStats.cancel()
+        self.updateGuildEmojis.cancel()
 
 #########################################################################################
 # Loops.
@@ -1503,6 +1513,10 @@ class PUG(commands.Cog):
     async def before_updateUTQueryStats(self):
         await self.bot.wait_until_ready()
 
+    @tasks.loop(minutes=5)
+    async def updateGuildEmojis(self):
+        self.cacheGuildEmojis()
+        return
 #########################################################################################
 # Utilities.
 #########################################################################################
@@ -1765,6 +1779,10 @@ class PUG(commands.Cog):
                             # Message format: {"stamp":"20220101133700666", "type":"Say", "gametime":"120", "displaytime":"02:00", "message": ":robot::guitar:", "teamindex":"0", "team":"Red", "player":"Sizzl"}
                             if 'message' in m and 'stamp' in m and int(m['stamp']) > self.pugInfo.gameServer.utQueryConsoleWatermark:
                                 if 'type' in m and m['type'] == 'Say':
+                                    for em in self.customStaticEmojis:
+                                        m['message']  = re.compile(em).sub('<{0}{1}>'.format(em,self.customStaticEmojis[em]), m['message'])
+                                    for em in self.customAnimatedEmojis:
+                                        m['message']  = re.compile(em).sub('<a{0}{1}>'.format(em,self.customAnimatedEmojis[em]), m['message'])
                                     if 'team' in m:
                                         if m['team'] == 'Spectator':
                                             await reportToChannel.send('[{0}] {1} (*{2}*): {3}'.format(m['displaytime'],m['player'].strip(),m['team'],m['message'].strip()))
@@ -1775,11 +1793,13 @@ class PUG(commands.Cog):
                                 else:
                                     if re.search('1\sminutes\suntil\sgame\sstart|conquered\sthe\sbase|defended\sthe\sbase',m['message'],re.IGNORECASE) != None:
                                         bReportScoreLine = True
-                                    await reportToChannel.send('[{0}] {1}'.format(m['displaytime'],m['message'].strip()))
+                                    if len(m['message'].strip()) > 0:
+                                        await reportToChannel.send('[{0}] {1}'.format(m['displaytime'],m['message'].strip()))
                                 consoleWatermark = int(m['stamp'])
                         except:
                             try:
                                 # Message format: 20220101133700666 [13:37] Player: Message
+                                # We won't do any fancy replacements here, just drop the message verbatim.
                                 stamp = int(m[:17])
                             except:
                                 stamp = 0
@@ -1854,16 +1874,16 @@ class PUG(commands.Cog):
                             for x in range(int(queryData['numplayers'])):
                                 if 'player_{0}'.format(x) in queryData:
                                     player = {}
-                                    player['Name'] = queryData['player_{0}'.format(x)].replace('`','')
+                                    player['Name'] = queryData['player_{0}'.format(x)].replace('`','').strip()
                                     if len(player['Name']) > 19:
-                                        player['Name'] = '{0}...'.format(player['Name'][:17])
+                                        player['Name'] = '{0}...'.format(player['Name'][:17]).strip()
                                     player['Frags'] = '0'
                                     if 'frags_{0}'.format(x) in queryData:
-                                        player['Frags'] = queryData['frags_{0}'.format(x)]                                                                                            
+                                        player['Frags'] = queryData['frags_{0}'.format(x)].strip()                                                                                        
                                     player['Ping'] = '0'
                                     if 'ping_{0}'.format(x) in queryData:
-                                        player['Ping'] = queryData['ping_{0}'.format(x)]                                                                                            
-                                        if len(player['Ping']) > 3:
+                                        player['Ping'] = queryData['ping_{0}'.format(x)].strip()
+                                        if len(str(player['Ping'])) > 3:
                                             player['Ping'] = '---'
                                     if 'team_{0}'.format(x) in queryData:
                                         player['TeamId'] = queryData['team_{0}'.format(x)]
@@ -1877,13 +1897,13 @@ class PUG(commands.Cog):
                     # Set basic embed info
                     embedInfo.color = summary['Colour']
                     embedInfo.title = summary['Title']
-                    embedInfo.description = 'unreal://{0}:{1}'.format(queryData['ip'],queryData['game_port'])
+                    embedInfo.description = '```unreal://{0}:{1}```'.format(queryData['ip'],queryData['game_port'])
 
                     if 'password' in queryData and queryData['password'] == 'True':
                         embedInfo.set_footer(text='Spectate @ {0}/?password={1}'.format(self.pugInfo.gameServer.format_gameServerURL,self.pugInfo.gameServer.spectatorPassword))
 
                     # Pick out info for UTA-only games
-                    if 'gametype' in queryData and queryData['gametype'] == 'Assault':
+                    if 'bmatchmode' in queryData and 'gametype' in queryData and queryData['gametype'] == 'Assault':
                         # Send individual requests for objectives and UTA-enhanced team info, refresh local variable
                         self.pugInfo.gameServer.utQueryServer('objectives')
                         self.pugInfo.gameServer.utQueryServer('teams')
@@ -1959,6 +1979,14 @@ class PUG(commands.Cog):
             else:
                 self.pugInfo.gameServer.utQueryEmbedCache = {} # fall back to old method
         return True
+
+    def cacheGuildEmojis(self):
+        if self.activeChannel != None:
+            for x in self.activeChannel.guild.emojis:
+                if x.animated:
+                    self.customAnimatedEmojis[':{0}:'.format(x.name)] = x.id
+                else:
+                    self.customStaticEmojis[':{0}:'.format(x.name)] = x.id
 
     #########################################################################################
     # Bot Admin ONLY commands.
@@ -2232,7 +2260,7 @@ class PUG(commands.Cog):
         """Displays Pug server info"""
         await ctx.send(self.pugInfo.gameServer.format_game_server)
 
-    @commands.command(aliases = ['serverquery','serverinfo'])
+    @commands.command(aliases = ['serverinfo'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def serverstatus(self, ctx):
@@ -2247,6 +2275,62 @@ class PUG(commands.Cog):
             await ctx.message.channel.send(embed=embedInfo)
         else:
             await ctx.send(self.pugInfo.gameServer.format_game_server_status)
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.check(isActiveChannel_Check)
+    async def serverquery(self, ctx, serveraddr: str):
+        """Displays status of a given server"""
+        serverinfo = {}
+        if (self.pugInfo.gameServer.utQueryReporterActive or self.pugInfo.gameServer.utQueryStatsActive):
+            await ctx.send('Server query cannot be run while pug reporting is in progress.')
+        else:
+            if serveraddr not in ['',None]:
+                # Check for valid server input
+                for x in ['unreal://','\w+://','\\\\','localhost','^127\.']:
+                    try:
+                        serveraddr = re.compile(x).sub('', serveraddr)
+                    except:
+                        log.error('Failed to parse input to !serverquery')
+                # Check for IP with or without port, or FQDN with or without port
+                for x in ['^(?P<ip>((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)):(?P<port>\d{1,5})$',
+                          '^(?P<ip>((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$',
+                          '^(?P<dns>(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})):(?P<port>\d{1,5})$',
+                          '^(?P<dns>(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)']:
+                    if re.search(x,serveraddr):
+                        servermatch = re.match(r'{0}'.format(x),serveraddr)
+                        if not 'ip' in servermatch.groupdict() and 'dns' in servermatch.groupdict():
+                            for ip in dns.resolver.resolve(servermatch['dns'], 'A'):
+                                serverinfo['ip'] = ip.address
+                            if 'port' in servermatch.groupdict():
+                                serverinfo['game_port'] = int(servermatch.groupdict()['port'])
+                            else:
+                                serverinfo['game_port'] = 7777
+                        elif 'ip' in servermatch.groupdict() and 'port' in servermatch.groupdict():
+                            serverinfo['ip'] = servermatch.groupdict()['ip']
+                            serverinfo['game_port'] = int(servermatch.groupdict()['port'])
+                        elif 'ip' in servermatch.groupdict():
+                            serverinfo['ip'] = servermatch.groupdict()['ip']
+                            serverinfo['game_port'] = 7777
+            if serverinfo != {}:
+                serverinfo['query_port'] = int(serverinfo['game_port'])+1
+                # Set the utQueryData base
+                self.pugInfo.gameServer.utQueryData = serverinfo
+                await self.queryServerStats(True)
+                if self.pugInfo.gameServer.utQueryEmbedCache != {}:
+                    embedInfo = discord.Embed().from_dict(self.pugInfo.gameServer.utQueryEmbedCache)
+                    # Reset caches
+                    self.pugInfo.gameServer.utQueryData = {}
+                    self.pugInfo.gameServer.utQueryEmbedCache = {}
+                    # Strip objectives from the card data
+                    for x, f in enumerate(embedInfo.fields):
+                        if 'Objectives' in f.name:
+                            embedInfo.remove_field(x)
+                    await ctx.message.channel.send(embed=embedInfo)
+                else:
+                    await ctx.send('Could not resolve server from provided information.')
+            else:
+                await ctx.send('Could not resolve server from provided information.')
 
     @commands.command()
     @commands.guild_only()
@@ -2490,7 +2574,7 @@ class PUG(commands.Cog):
     @commands.command(aliases = ['setrep','repchan'])
     @commands.guild_only()
     @commands.check(admin.hasManagerRole_Check)
-    async def setReporter(self, ctx):
+    async def setreporter(self, ctx):
         """Configures the UT Server Reporter channel. Admin only"""
         self.utReporterChannel = ctx.message.channel
         await ctx.send('UT Reporter threads will be active in this channel for the next PUG.')
@@ -2499,7 +2583,7 @@ class PUG(commands.Cog):
     @commands.command(aliases = ['muterep'])
     @commands.guild_only()
     @commands.check(admin.hasManagerRole_Check)
-    async def muteReporter(self, ctx):
+    async def mutereporter(self, ctx):
         """Mutes the UT Server Reporter until the next active pug. Admin only"""
         if (self.pugInfo.gameServer.utQueryReporterActive or self.pugInfo.gameServer.utQueryStatsActive) and self.utReporterChannel != None:
             self.pugInfo.gameServer.utQueryReporterActive = False
@@ -2512,7 +2596,7 @@ class PUG(commands.Cog):
     @commands.command(aliases = ['startrep','forcerep'])
     @commands.guild_only()
     @commands.check(admin.hasManagerRole_Check)
-    async def startReporter(self, ctx):
+    async def startreporter(self, ctx):
         """Force-starts the UT Server Reporter, whether an active pug is running or not. Admin only"""
         if self.pugInfo.gameServer.utQueryStatsActive or self.pugInfo.gameServer.utQueryReporterActive:
             if self.utReporterChannel == None:
