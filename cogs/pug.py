@@ -1837,7 +1837,7 @@ class PUG(commands.Cog):
                     self.pugInfo.gameServer.utQueryData['laststats'] = int(time.time())
 
                 # Send multi-query request for lots of info
-                if self.pugInfo.gameServer.utQueryServer('status\\\\level_property\\timedilation\\\\game_property\\teamscore\\\\game_property\\teamnamered\\\\game_property\\teamnameblue\\\\player_property\\Health\\\\game_property\\elapsedtime\\\\game_property\\remainingtime\\\\game_property\\bmatchmode\\\\game_property\\friendlyfirescale\\\\game_property\\currentdefender\\\\game_property\\bdefenseset\\\\game_property\\matchcode\\\\rules'):
+                if self.pugInfo.gameServer.utQueryServer('status\\\\level_property\\timedilation\\\\game_property\\teamscore\\\\game_property\\teamnamered\\\\game_property\\teamnameblue\\\\player_property\\Health\\\\game_property\\elapsedtime\\\\game_property\\remainingtime\\\\game_property\\bmatchmode\\\\game_property\\friendlyfirescale\\\\game_property\\currentdefender\\\\game_property\\bdefenseset\\\\game_property\\matchcode\\\\game_property\\fraglimit\\\\game_property\\timelimit\\\\rules'):
                     queryData = self.pugInfo.gameServer.utQueryData
 
                     # Build embed data
@@ -1846,7 +1846,6 @@ class PUG(commands.Cog):
                         'Title': 'Pug Match',
                         'RoundStatus': '',
                         'Map': '',
-                        'RemainingTime': '',
                         'Objectives': '',
                         'Hostname': '',
                         'PlayerCount': ''
@@ -1866,6 +1865,10 @@ class PUG(commands.Cog):
                         summary['Map'] = queryData['mapname']
                     if 'remainingtime' in queryData:
                         summary['RemainingTime'] = '{0}'.format(str(time.strftime('%M:%S',time.gmtime(int(queryData['remainingtime'])))))
+                    elif 'elapsedtime' in queryData:
+                        summary['ElapsedTime'] = '{0}'.format(str(time.strftime('%M:%S',time.gmtime(int(queryData['elapsedtime'])))))
+                    elif 'timelimit' in queryData and int(queryData['timelimit']) > 0:
+                        summary['TimeLimit'] = '{0}:00'.format(int(queryData['timelimit']))
                     if 'maptitle' in queryData:
                         summary['Map'] = queryData['maptitle']
                     if 'numplayers' in queryData and 'maxplayers' in queryData:
@@ -1899,7 +1902,7 @@ class PUG(commands.Cog):
                     embedInfo.title = summary['Title']
                     embedInfo.description = '```unreal://{0}:{1}```'.format(queryData['ip'],queryData['game_port'])
 
-                    if 'password' in queryData and queryData['password'] == 'True':
+                    if 'password' in queryData and queryData['password'] == 'True' and self.pugInfo.gameServer.format_gameServerURL=='unreal://{0}:{1}'.format(queryData['ip'],queryData['game_port']):
                         embedInfo.set_footer(text='Spectate @ {0}/?password={1}'.format(self.pugInfo.gameServer.format_gameServerURL,self.pugInfo.gameServer.spectatorPassword))
 
                     # Pick out info for UTA-only games
@@ -1952,16 +1955,27 @@ class PUG(commands.Cog):
                         embedInfo.description = summary['RoundStatus']
                         embedInfo.add_field(name='Map',value=summary['Map'],inline=True)
                         embedInfo.add_field(name='Players',value=summary['PlayerCount'],inline=True)
-                        embedInfo.add_field(name='Time Left',value=summary['RemainingTime'],inline=True)
+                        if 'RemainingTime' in summary:
+                            embedInfo.add_field(name='Time Left',value=summary['RemainingTime'],inline=True)
                         embedInfo.add_field(name='Objectives',value=summary['Objectives'],inline=False)
                     else:
                         # No UTA enhanced information available, report basic statistics
+                        queryData = self.pugInfo.gameServer.utQueryData
                         embedInfo.add_field(name='Map',value=summary['Map'],inline=True)
                         embedInfo.add_field(name='Players',value=summary['PlayerCount'],inline=True)
-                        embedInfo.add_field(name='Time Left',value=summary['RemainingTime'],inline=True)
-
+                        if 'RemainingTime' in summary:
+                            embedInfo.add_field(name='Time Left',value=summary['RemainingTime'],inline=True)
+                        elif 'ElapsedTime' in summary:
+                            embedInfo.add_field(name='Time Elapsed',value=summary['ElapsedTime'],inline=True)
+                        elif 'TimeLimit' in summary:
+                            embedInfo.add_field(name='Time Limit',value=summary['TimeLimit'],inline=True)
+                        elif 'goalteamscore' in queryData and int(queryData['goalteamscore']) > 0:
+                            embedInfo.add_field(name='Req. Team Score',value=queryData['goalteamscore'],inline=True)
+                        elif 'fraglimit' in queryData and int(queryData['fraglimit']) > 0:
+                            embedInfo.add_field(name='Frag Limit',value=queryData['fraglimit'],inline=True)
+                        elif 'gametype' in queryData:
+                            embedInfo.add_field(name='Mode',value=queryData['gametype'],inline=True)
                     if 'numplayers' in queryData and int(queryData['numplayers']) > 0:
-                        #embedInfo.add_field(name='',value='\u2800'*100,inline=False)
                         embedInfo.add_field(name='Red Team',value=summary['PlayerList0'],inline=False)
                         embedInfo.add_field(name='Blue Team',value=summary['PlayerList1'],inline=False)
 
@@ -2300,8 +2314,11 @@ class PUG(commands.Cog):
                     if re.search(x,serveraddr):
                         servermatch = re.match(r'{0}'.format(x),serveraddr)
                         if not 'ip' in servermatch.groupdict() and 'dns' in servermatch.groupdict():
-                            for ip in dns.resolver.resolve(servermatch['dns'], 'A'):
-                                serverinfo['ip'] = ip.address
+                            try:
+                                for ip in dns.resolver.resolve(servermatch['dns'], 'A'):
+                                    serverinfo['ip'] = ip.address
+                            except:
+                                log.warn('DNS lookup failure for {0}'.format(serveraddr))
                             if 'port' in servermatch.groupdict():
                                 serverinfo['game_port'] = int(servermatch.groupdict()['port'])
                             else:
