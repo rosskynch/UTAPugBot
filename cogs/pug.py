@@ -2,6 +2,7 @@ import collections
 import time
 import asyncpg
 from datetime import datetime
+from datetime import timezone
 import functools
 import itertools
 import os
@@ -890,7 +891,7 @@ class GameServer:
 
     @property
     def format_new_watermark(self):
-        return int(time.strftime('%Y%m%d%H%M%S000'))
+        return int(datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S000'))
 
     #########################################################################################
     # Functions:
@@ -1504,7 +1505,7 @@ class PUG(commands.Cog):
             if self.pugInfo.gameServer.utQueryStatsActive:
                 if (not'laststats' in self.pugInfo.gameServer.utQueryData) or ('laststats' in self.pugInfo.gameServer.utQueryData and int(time.time())-int(self.pugInfo.gameServer.utQueryData['laststats']) > 55):
                     await self.queryServerStats()
-            elif self.pugInfo.gameServer.utQueryReporterActive:
+            elif self.pugInfo.gameServer.utQueryReporterActive and self.pugInfo.pugLocked:
                 # Skip one cycle, then re-enable stats
                 self.pugInfo.gameServer.utQueryStatsActive = True
         return
@@ -1574,7 +1575,8 @@ class PUG(commands.Cog):
     def savePugConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
-            last_active_channel_id = info['pug']['activechannelid']
+            if 'pug' in info and 'activechannelid' in info['pug']:
+                last_active_channel_id = info['pug']['activechannelid']
             if 'pug' not in info:
                 info['pug'] = {}
             if self.activeChannel:
@@ -1602,11 +1604,7 @@ class PUG(commands.Cog):
                     for p in self.pugInfo.all:
                         if (p not in [None]):
                             info['pug']['current']['signed'].append(p.id)
-                if len(self.pugInfo.captainsFull) > 0:
-                    info['pug']['current']['captains'] = []
-                    for p in self.pugInfo.captainsFull:
-                        if (p not in [None]):
-                            info['pug']['current']['captains'].append(p.id)
+
                 # last pug info:
                 info['pug']['lastpug'] = {}
                 if self.pugInfo.lastPugTimeStarted:
@@ -1853,7 +1851,8 @@ class PUG(commands.Cog):
                     for x in range(0,4):
                         summary['PlayerList{0}'.format(x)] = '*(No players)*'
                         summary['PlayerList{0}_data'.format(x)] = ''
-
+                    summary['PlayerList255'] = '*(No Spectators)*'
+                    summary['PlayerList255_data'] = ''
                     # Pick out generic UT info
                     if 'hostname' in queryData:
                         if 'mutators' in queryData and re.search('Lag\sCompensator',str(queryData['mutators']),re.IGNORECASE) != None:
@@ -1890,12 +1889,19 @@ class PUG(commands.Cog):
                                             player['Ping'] = '---'
                                     if 'team_{0}'.format(x) in queryData:
                                         player['TeamId'] = queryData['team_{0}'.format(x)]
-                                    summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\n{1}\t {2} {3}'.format(summary['PlayerList{0}_data'.format(player['TeamId'])],player['Name'].ljust(20),player['Frags'].rjust(5),player['Ping'].rjust(4))
+                                    if player['TeamId'] == '255':
+                                        summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\n{1}\t {2} {3}'.format(summary['PlayerList{0}_data'.format(player['TeamId'])],player['Name'].ljust(20),''.rjust(5),player['Ping'].rjust(4))
+                                    else:
+                                        summary['PlayerList{0}_data'.format(player['TeamId'])] = '{0}\n{1}\t {2} {3}'.format(summary['PlayerList{0}_data'.format(player['TeamId'])],player['Name'].ljust(20),player['Frags'].rjust(5),player['Ping'].rjust(4))
 
                             for x in range(int(queryData['maxteams'])):
                                 if summary['PlayerList{0}_data'.format(x)] not in ['',None]:
                                     summary['PlayerList{0}'.format(x)] = '```Player Name{0}\t Score Ping'.format('\u2800'*8)
                                     summary['PlayerList{0}'.format(x)] = '{0}{1}\n```'.format(summary['PlayerList{0}'.format(x)],summary['PlayerList{0}_data'.format(x)])
+                            
+                            if summary['PlayerList255_data'] not in ['',None]:
+                                summary['PlayerList255'] = '```Name       {0}\t       Ping'.format('\u2800'*8)
+                                summary['PlayerList255'] = '{0}{1}\n```'.format(summary['PlayerList255'],summary['PlayerList255_data'])
 
                     # Set basic embed info
                     embedInfo.color = summary['Colour']
@@ -1978,6 +1984,9 @@ class PUG(commands.Cog):
                     if 'numplayers' in queryData and int(queryData['numplayers']) > 0:
                         embedInfo.add_field(name='Red Team',value=summary['PlayerList0'],inline=False)
                         embedInfo.add_field(name='Blue Team',value=summary['PlayerList1'],inline=False)
+
+                    if summary['PlayerList255_data'] != '':
+                        embedInfo.add_field(name='Spectators',value=summary['PlayerList255'],inline=False)
 
                     if cacheonly == False:
                         await self.utReporterChannel.send(embed=embedInfo)
@@ -2062,6 +2071,7 @@ class PUG(commands.Cog):
         svindex = idx - 1 # offset as users see them 1-based index.
         if self.pugInfo.gameServer.useServer(svindex,self.pugInfo.captainsReady): # auto start eligible servers when caps are ready
             await ctx.send('Server was activated by an admin - {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
+            self.pugInfo.gameServer.utQueryConsoleWatermark = self.pugInfo.gameServer.format_new_watermark
             if self.pugInfo.gameServer.gameServerState in ('N/A','N/AN/A'):
                 # Check whether server is being changed when captains are already ready
                 if not self.pugInfo.captainsReady:
@@ -2496,13 +2506,14 @@ class PUG(commands.Cog):
             await ctx.send('{0} left.'.format(display_name(player)))
             await self.processPugStatus(ctx)
 
-    @commands.command()
+    @commands.command(aliases=['cap','сфзефшт'])
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Ignore)
     async def captain(self, ctx):
         """Volunteer to be a captain in the pug"""
         if not self.pugInfo.playersReady or self.pugInfo.captainsReady or self.pugInfo.gameServer.matchInProgress:
+            log.debug('!captain rejected: Players Ready = {0}, Captains Ready = {1}, Match In Progress {2}'.format(self.pugInfo.playersReady,self.pugInfo.captainsReady,self.pugInfo.gameServer.matchInProgress))
             return
 
         player = ctx.message.author
