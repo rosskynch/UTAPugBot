@@ -1505,7 +1505,7 @@ class PUG(commands.Cog):
             if self.pugInfo.gameServer.utQueryStatsActive:
                 if (not'laststats' in self.pugInfo.gameServer.utQueryData) or ('laststats' in self.pugInfo.gameServer.utQueryData and int(time.time())-int(self.pugInfo.gameServer.utQueryData['laststats']) > 55):
                     await self.queryServerStats()
-            elif self.pugInfo.gameServer.utQueryReporterActive and self.pugLocked:
+            elif self.pugInfo.gameServer.utQueryReporterActive and self.pugInfo.pugLocked:
                 # Skip one cycle, then re-enable stats
                 self.pugInfo.gameServer.utQueryStatsActive = True
         return
@@ -1575,7 +1575,8 @@ class PUG(commands.Cog):
     def savePugConfig(self, configFile):
         with open(configFile) as f:
             info = json.load(f)
-            last_active_channel_id = info['pug']['activechannelid']
+            if 'pug' in info and 'activechannelid' in info['pug']:
+                last_active_channel_id = info['pug']['activechannelid']
             if 'pug' not in info:
                 info['pug'] = {}
             if self.activeChannel:
@@ -1603,11 +1604,7 @@ class PUG(commands.Cog):
                     for p in self.pugInfo.all:
                         if (p not in [None]):
                             info['pug']['current']['signed'].append(p.id)
-                if len(self.pugInfo.captainsFull) > 0:
-                    info['pug']['current']['captains'] = []
-                    for p in self.pugInfo.captainsFull:
-                        if (p not in [None]):
-                            info['pug']['current']['captains'].append(p.id)
+
                 # last pug info:
                 info['pug']['lastpug'] = {}
                 if self.pugInfo.lastPugTimeStarted:
@@ -2516,6 +2513,7 @@ class PUG(commands.Cog):
     async def captain(self, ctx):
         """Volunteer to be a captain in the pug"""
         if not self.pugInfo.playersReady or self.pugInfo.captainsReady or self.pugInfo.gameServer.matchInProgress:
+            log.debug('!captain rejected: Players Ready = {0}, Captains Ready = {1}, Match In Progress {2}'.format(self.pugInfo.playersReady,self.pugInfo.captainsReady,self.pugInfo.gameServer.matchInProgress))
             return
 
         player = ctx.message.author
