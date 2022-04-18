@@ -3,6 +3,7 @@ import time
 import asyncpg
 from datetime import datetime
 from datetime import timezone
+from datetime import timedelta
 import functools
 import itertools
 import os
@@ -570,6 +571,7 @@ class GameServer:
         self.gameServerState = ''
         self.gameServerOnDemand = False
         self.gameServerOnDemandReady = True
+        self.gameServerRotation = []
 
         # Setup details
         self.redPassword = DEFAULT_RED_PASSWORD
@@ -639,6 +641,12 @@ class GameServer:
                             self.gameServerRef = server['serverref']
                 else:
                     log.warn('Serverlist not found in config file.')
+                if 'serverrotation' in info and len(info['serverrotation']):
+                    self.gameServerRotation = []
+                    for x in info['serverrotation']:
+                        svindex = int(x)-1
+                        if svindex >= 0 and svindex < len(self.allServers):
+                            self.gameServerRotation.append(int(x))
             else:
                 log.error('GameServer: Config file could not be loaded: {0}'.format(configFile))
             f.close()
@@ -673,6 +681,8 @@ class GameServer:
                     if s[0] == self.gameServerRef:
                         serverinfo['serverdefault'] = True
                     info['serverlist'].append(serverinfo)
+            if len(self.gameServerRotation):
+                info['serverrotation'] = self.gameServerRotation
             f.close()
         with open(configFile, 'w') as f:
             json.dump(info, f, indent=4)
@@ -1145,6 +1155,18 @@ class GameServer:
 
         return True
 
+    def checkServerRotation(self):
+        # An imprecise science here, as where there is a mismatch between number of rotation items and weeks in a year,
+        # the pattern may break when crossing over between week 52 and week 1 at new year.
+        if len(self.gameServerRotation) > 0:
+            # Extended the input a little, rather than simply week number, it's a combination of yearweek (e.g., 202201 - 202252),
+            # which works better with smaller rotation pools
+            newServer = int(self.gameServerRotation[int('{:0}{:0>2}'.format(datetime.today().year,datetime.today().isocalendar()[1]))%len(self.gameServerRotation)])-1
+            if self.gameServerRef != self.allServers[newServer][0]:
+                log.debug('checkServerRotation - Updating current server to: {0}'.format(self.allServers[newServer][1]))
+                self.useServer(newServer)
+        return True
+
     #########################################################################################
     # Loops
     #########################################################################################
@@ -1457,6 +1479,9 @@ class PUG(commands.Cog):
         # Start the Emoji update loop
         self.updateGuildEmojis.start()
 
+        # Start the looped task for server rotation
+        self.updateServerRotation.start()
+        
         self.lastPokeTime = datetime.now()
 
     def cog_unload(self):
@@ -1464,6 +1489,7 @@ class PUG(commands.Cog):
         self.updateUTQueryReporter.cancel()
         self.updateUTQueryStats.cancel()
         self.updateGuildEmojis.cancel()
+        self.updateServerRotation.cancel()
 
 #########################################################################################
 # Loops.
@@ -1517,6 +1543,12 @@ class PUG(commands.Cog):
     @tasks.loop(minutes=5)
     async def updateGuildEmojis(self):
         self.cacheGuildEmojis()
+        return
+    
+    @tasks.loop(hours=2)
+    async def updateServerRotation(self):
+        if not self.pugInfo.pugLocked:
+            self.pugInfo.gameServer.checkServerRotation()
         return
 #########################################################################################
 # Utilities.
@@ -2107,13 +2139,16 @@ class PUG(commands.Cog):
         else:
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
 
-    @commands.command()
+    @commands.command(aliases=['refreshservers'])
     @commands.check(admin.hasManagerRole_Check)
     @commands.check(isPugInProgress_Warn)
-    async def refreshservers(self, ctx):
+    async def adminrefreshservers(self, ctx):
         """Refreshes the server list within the available pool. Admin only"""
         if self.pugInfo.gameServer.validateServers():
-            await ctx.send('Server list refreshed.')
+            if len(self.pugInfo.gameServer.gameServerRotation) > 0:
+                await ctx.send('Server list refreshed. Check whether the server rotation is still valid.')
+            else:
+                await ctx.send('Server list refreshed.')
         else:
             await ctx.send('Server list could not be refreshed.')
 
@@ -2126,6 +2161,59 @@ class PUG(commands.Cog):
             await ctx.send('Server was removed from the available pool by an admin.')
         else:
             await ctx.send('Server could not be removed. Is it even in the list?')
+    
+    @commands.command(aliases=['setrotation','rotate'])
+    @commands.check(admin.hasManagerRole_Check)
+    @commands.check(isPugInProgress_Warn)
+    async def adminsetserverrotation(self, ctx, *rotation: str):
+        """Rotates servers weekly based on the provided servers. Admin only"""
+        tempRotation = self.pugInfo.gameServer.gameServerRotation
+        self.pugInfo.gameServer.gameServerRotation = []
+        for index in rotation:
+            if index.isdigit() and (int(index) > 0 and int(index) <= len(self.pugInfo.gameServer.allServers)):
+                self.pugInfo.gameServer.gameServerRotation.append(int(index))
+        # Reset to previous selection if given rotation was invalid
+        if self.pugInfo.gameServer.gameServerRotation == [] and tempRotation != []:
+            self.pugInfo.gameServer.gameServerRotation = tempRotation
+            await ctx.send('Server rotation unchanged.')
+        else:
+            self.pugInfo.gameServer.saveServerConfig(self.pugInfo.gameServer.configFile)
+            await ctx.send('Server rotation set to: {0}'.format(', '.join(map(str,self.pugInfo.gameServer.gameServerRotation))))
+
+    @commands.command(aliases=['checkrotation','checkrotate'])
+    @commands.check(isPugInProgress_Warn)
+    async def checkserverrotation(self, ctx):
+        """Checks current server and rotates accordingly."""
+        tempRotation = self.pugInfo.gameServer.gameServerRef
+        if len(self.pugInfo.gameServer.gameServerRotation) > 0:
+            self.pugInfo.gameServer.checkServerRotation()
+            if self.pugInfo.gameServer.gameServerRef != tempRotation:
+                await ctx.send('Server rotation changed server to: {0}.'.format(self.pugInfo.gameServer.format_current_serveralias))
+            else:
+                await ctx.send('Server is already correctly set.')
+        else:
+            await ctx.send('Server rotation is not configured.')
+
+    @commands.command(aliases=['getrotation'])
+    async def getserverrotation(self, ctx):
+        """Shows server rotation."""
+        if len(self.pugInfo.gameServer.gameServerRotation) > 0:
+            thisWeek = int(self.pugInfo.gameServer.gameServerRotation[int('{:0}{:0>2}'.format(datetime.today().year,datetime.today().isocalendar()[1]))%len(self.pugInfo.gameServer.gameServerRotation)])
+            nextWeek = int(self.pugInfo.gameServer.gameServerRotation[int('{:0}{:0>2}'.format((datetime.now()+timedelta(weeks=1)).year,(datetime.now()+timedelta(weeks=1)).isocalendar()[1]))%len(self.pugInfo.gameServer.gameServerRotation)])
+            await ctx.send('Server rotation:')
+            for x in self.pugInfo.gameServer.gameServerRotation:
+                svindex = int(x)-1
+                if svindex >= 0 and svindex < len(self.pugInfo.gameServer.allServers):
+                    if (thisWeek == int(x)):
+                        await ctx.send(' - {0}{1}'.format(self.pugInfo.gameServer.allServers[svindex][1],' :arrow_forward: This week'))
+                        thisWeek = -1
+                    elif (nextWeek == int(x)):
+                        await ctx.send(' - {0}{1}'.format(self.pugInfo.gameServer.allServers[svindex][1],' :fast_forward: Next week'))
+                        nextWeek = -1
+                    else:
+                        await ctx.send(' - {0}'.format(self.pugInfo.gameServer.allServers[svindex][1]))
+        else:
+            await ctx.send('Server rotation is not configured.')
 
     @commands.command()
     @commands.check(admin.hasManagerRole_Check)
