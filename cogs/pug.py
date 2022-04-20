@@ -821,6 +821,17 @@ class GameServer:
             'IT':':flag_it:',
             'DK':':flag_dk:',
             'JP':':flag_jp:',
+            'AU':':flag_au',
+            'AT':':flag_at',
+            'BE':':flag_be',
+            'CA':':flag_ca',
+            'PL':':flag_pl',
+            'FI':':flag_fi',
+            'HU':':flag_hu',
+            'NO':':flag_no',
+            'CN':':flag_cn',
+            'XX':':pirate_flag:',
+            'GP':':rainbow_flag:',
             'US':':flag_us:'
         }
         msg = []
@@ -1161,7 +1172,7 @@ class GameServer:
         if len(self.gameServerRotation) > 0:
             # Extended the input a little, rather than simply week number, it's a combination of yearweek (e.g., 202201 - 202252),
             # which works better with smaller rotation pools
-            newServer = int(self.gameServerRotation[int('{:0}{:0>2}'.format(datetime.today().year,datetime.today().isocalendar()[1]))%len(self.gameServerRotation)])-1
+            newServer = int(self.gameServerRotation[int('{:0}{:0>2}'.format(datetime.now().year,datetime.now().isocalendar()[1]))%len(self.gameServerRotation)])-1
             if self.gameServerRef != self.allServers[newServer][0]:
                 log.debug('checkServerRotation - Updating current server to: {0}'.format(self.allServers[newServer][1]))
                 self.useServer(newServer)
@@ -1545,9 +1556,11 @@ class PUG(commands.Cog):
         self.cacheGuildEmojis()
         return
     
-    @tasks.loop(hours=2)
+    @tasks.loop(hours=1)
     async def updateServerRotation(self):
-        if not self.pugInfo.pugLocked:
+        # Only auto-rotate between 6:00 and 9:59 am on a Monday
+        if datetime.now().weekday() == 0 and datetime.now().hour >= 6 and datetime.now().hour <= 9 and not self.pugInfo.pugLocked:
+            log.debug('updateServerRotation loop - calling checkServerRotation()')
             self.pugInfo.gameServer.checkServerRotation()
         return
 #########################################################################################
@@ -2198,7 +2211,7 @@ class PUG(commands.Cog):
     async def getserverrotation(self, ctx):
         """Shows server rotation."""
         if len(self.pugInfo.gameServer.gameServerRotation) > 0:
-            thisWeek = int(self.pugInfo.gameServer.gameServerRotation[int('{:0}{:0>2}'.format(datetime.today().year,datetime.today().isocalendar()[1]))%len(self.pugInfo.gameServer.gameServerRotation)])
+            thisWeek = int(self.pugInfo.gameServer.gameServerRotation[int('{:0}{:0>2}'.format(datetime.now().year,datetime.now().isocalendar()[1]))%len(self.pugInfo.gameServer.gameServerRotation)])
             nextWeek = int(self.pugInfo.gameServer.gameServerRotation[int('{:0}{:0>2}'.format((datetime.now()+timedelta(weeks=1)).year,(datetime.now()+timedelta(weeks=1)).isocalendar()[1]))%len(self.pugInfo.gameServer.gameServerRotation)])
             await ctx.send('Server rotation:')
             for x in self.pugInfo.gameServer.gameServerRotation:
