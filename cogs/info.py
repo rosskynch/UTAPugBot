@@ -117,5 +117,5 @@ class Info(commands.Cog):
         """Shows UTA RocketArena server info"""
         await ctx.send("UTA RocketArena server: **unreal://www.utapug.net:9600**")
 
-def setup(bot):
-    bot.add_cog(Info(bot))
+async def setup(bot):
+    await bot.add_cog(Info(bot))

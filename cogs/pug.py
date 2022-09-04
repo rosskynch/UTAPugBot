@@ -2742,5 +2742,5 @@ class PUG(commands.Cog):
                     self.pugInfo.gameServer.utQueryReporterActive = True
                     await ctx.send('Force-started UT Reporter threads in this channel')
         return
-def setup(bot):
-    bot.add_cog(PUG(bot, DEFAULT_CONFIG_FILE))
+async def setup(bot):
+    await bot.add_cog(PUG(bot, DEFAULT_CONFIG_FILE))

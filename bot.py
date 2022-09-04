@@ -55,7 +55,7 @@ async def on_ready():
     # Load extensions after bot is logged to ensure commands which require an active connection work.
     for extension in extensions:
         try:
-            bot.load_extension(extension)
+            await bot.load_extension(extension)
         except Exception as e:
             log.error('Failed to load extension {}\n{}: {}'.format(
                 extension, type(e).__name__, e))

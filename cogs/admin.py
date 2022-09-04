@@ -149,5 +149,5 @@ class Admin(commands.Cog):
             except:
                 await ctx.send('Failed to send PM, are your PMs enabled for this server?')
 
-def setup(bot):
-    bot.add_cog(Admin(bot, DEFAULT_CONFIG_FILE))
+async def setup(bot):
+    await bot.add_cog(Admin(bot, DEFAULT_CONFIG_FILE))
