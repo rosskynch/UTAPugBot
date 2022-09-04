@@ -482,8 +482,7 @@ class PugTeams(Players):
     #########################################################################################
     def removePugTeamPlayer(self, player):
         if player in self:
-            if self.red or self.blue:
-                self.softPugTeamReset()
+            self.softPugTeamReset()
             self.removePlayer(player)
             return True
         return False
@@ -492,16 +491,14 @@ class PugTeams(Players):
         if self.red or self.blue:
             self.players += self.red + self.blue
             self.players = list(filter(None, self.players))
-            self.red.clear()
-            self.blue.clear()
+            self.teams = (Team(), Team())
             self.here = [True, True]
             return True
         return False
 
     def fullPugTeamReset(self):
-        self.players = []
-        self.red.clear()
-        self.blue.clear()
+        self.softPugTeamReset
+        self.resetPlayers
         self.here = [True, True]
 
     def setCaptain(self, player):
@@ -2341,7 +2338,12 @@ class PUG(commands.Cog):
             msg = []
             msg.append(self.pugInfo.format_pug())
             if self.pugInfo.playersReady:
-                msg.append('Waiting for captains. Type **!captain** to become a captain. To choose random captains type **!randomcaptains**')
+                # Copy of what's in processPugStatus, not ideal, but avoids the extra logic it does.
+                if self.pugInfo.numCaptains == 1:
+                    # Need second captain.
+                    msg.append('Waiting for 2nd captain. Type **!captain** to become a captain. To choose a random captain type **!randomcaptains**')
+                else:
+                    msg.append('Waiting for captains. Type **!captain** to become a captain. To choose random captains type **!randomcaptains**')
             await ctx.send('\n'.join(msg))
 
     @commands.command(aliases = ['pugtime'])
@@ -2541,6 +2543,8 @@ class PUG(commands.Cog):
             else:
                 await ctx.send('Pug is in progress, only players involved the pug or admins can reset.')
             if self.resetRequestRed and self.resetRequestBlue:
+                self.resetRequestRed = False
+                self.resetRequestBlue = False
                 reset = True
         if reset:
             await ctx.send('Removing all signed players: {}'.format(self.pugInfo.format_all_players(number=False, mention=True)))
@@ -2570,7 +2574,7 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Warn)
     async def resetcaptains(self, ctx):
         """Resets back to captain mode. Any players or maps picked will be reset."""
-        if self.pugInfo.numCaptains < 1:
+        if self.pugInfo.numCaptains < 1 or self.pugLocked:
             return
 
         self.pugInfo.maps.resetMaps()
