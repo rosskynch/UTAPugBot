@@ -95,14 +95,14 @@ class Admin(commands.Cog):
         ctx.bot.get_cog('PUG').savePugConfig(ctx.bot.get_cog('PUG').configFile)
         print("Shutting down.")
         await ctx.send("Shutting down.")
-        await ctx.bot.logout()
+        await ctx.bot.close()
 
     @commands.command(hidden=True, invoke_without_command=True)
     @commands.is_owner()
     async def load(self, ctx, *, module):
         """Loads a module."""
         try:
-            self.bot.load_extension(module)
+            await self.bot.load_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
@@ -113,7 +113,7 @@ class Admin(commands.Cog):
     async def unload(self, ctx, *, module):
         """Unloads a module."""
         try:
-            self.bot.unload_extension(module)
+            await self.bot.unload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
@@ -127,7 +127,7 @@ class Admin(commands.Cog):
             if str.lower(module) == 'cogs.pug':
                 # Save the config before reloading.
                 ctx.bot.get_cog('PUG').savePugConfig(ctx.bot.get_cog('PUG').configFile)
-            self.bot.reload_extension(module)
+            await self.bot.reload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
