@@ -497,8 +497,8 @@ class PugTeams(Players):
         return False
 
     def fullPugTeamReset(self):
-        self.softPugTeamReset
-        self.resetPlayers
+        self.softPugTeamReset()
+        self.resetPlayers()
         self.here = [True, True]
 
     def setCaptain(self, player):

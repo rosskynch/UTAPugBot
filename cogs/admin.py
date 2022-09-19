@@ -113,6 +113,9 @@ class Admin(commands.Cog):
     async def unload(self, ctx, *, module):
         """Unloads a module."""
         try:
+            if str.lower(module) == 'cogs.pug':
+                # Save the config before unloading.
+                ctx.bot.get_cog('PUG').savePugConfig(ctx.bot.get_cog('PUG').configFile)
             await self.bot.unload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
