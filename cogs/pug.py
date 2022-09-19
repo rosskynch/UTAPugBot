@@ -497,8 +497,8 @@ class PugTeams(Players):
         return False
 
     def fullPugTeamReset(self):
-        self.softPugTeamReset
-        self.resetPlayers
+        self.softPugTeamReset()
+        self.resetPlayers()
         self.here = [True, True]
 
     def setCaptain(self, player):
@@ -818,15 +818,15 @@ class GameServer:
             'IT':':flag_it:',
             'DK':':flag_dk:',
             'JP':':flag_jp:',
-            'AU':':flag_au',
-            'AT':':flag_at',
-            'BE':':flag_be',
-            'CA':':flag_ca',
-            'PL':':flag_pl',
-            'FI':':flag_fi',
-            'HU':':flag_hu',
-            'NO':':flag_no',
-            'CN':':flag_cn',
+            'AU':':flag_au:',
+            'AT':':flag_at:',
+            'BE':':flag_be:',
+            'CA':':flag_ca:',
+            'PL':':flag_pl:',
+            'FI':':flag_fi:',
+            'HU':':flag_hu:',
+            'NO':':flag_no:',
+            'CN':':flag_cn:',
             'XX':':pirate_flag:',
             'GP':':rainbow_flag:',
             'US':':flag_us:'
