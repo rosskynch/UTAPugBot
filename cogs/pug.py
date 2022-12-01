@@ -99,7 +99,7 @@ DEFAULT_MAP_LIST = [
 #  verified against the online API.
 
 DEFAULT_SERVER_LIST = [
-    ('pugs1','UTA Pug Server 1.uk')
+    ('pugs1','UTA Pug Server 1.uk','unreal://pug1.utassault.net',False,'')
 ]
 
 PICKMODES = [
@@ -989,7 +989,7 @@ class GameServer:
                 # firstly, determine if the primary server is online and responding, then drop the local list
                 serverDefaultPresent = False
                 for svc in info:
-                    if svc['serverDefault'] == True and svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']:
+                    if svc['serverDefault'] == True and (svc['cloudManaged'] == True or svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']):
                         # If for whatever reason the default server isn't working, then stick to local list for now.
                         serverDefaultPresent = True
                         break
