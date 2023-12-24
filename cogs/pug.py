@@ -134,9 +134,9 @@ def setupPugLogging(name):
     screen_handler.setLevel(logging.DEBUG)
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-    if not handler in logger.handlers:
+    if handler not in logger.handlers:
         logger.addHandler(handler)
-    if not screen_handler in logger.handlers:
+    if screen_handler not in logger.handlers:
         logger.addHandler(screen_handler)
     return logger
 
@@ -158,10 +158,10 @@ def getDuration(then, now, interval: str = 'default'):
     duration_in_s = duration.total_seconds()
 
     def years():                    return divmod(duration_in_s, 31536000) # Seconds in a year = 31536000.
-    def days(seconds = None):       return divmod(seconds if seconds != None else duration_in_s, 86400) # Seconds in a day = 86400
-    def hours(seconds = None):      return divmod(seconds if seconds != None else duration_in_s, 3600) # Seconds in an hour = 3600
-    def minutes(seconds = None):    return divmod(seconds if seconds != None else duration_in_s, 60) # Seconds in a minute = 60
-    def seconds(seconds = None):    return divmod(seconds, 1) if seconds != None else duration_in_s
+    def days(seconds = None):       return divmod(seconds if seconds is not None else duration_in_s, 86400) # Seconds in a day = 86400
+    def hours(seconds = None):      return divmod(seconds if seconds is not None else duration_in_s, 3600) # Seconds in an hour = 3600
+    def minutes(seconds = None):    return divmod(seconds if seconds is not None else duration_in_s, 60) # Seconds in a minute = 60
+    def seconds(seconds = None):    return divmod(seconds, 1) if seconds is not None else duration_in_s
     def totalDuration():
         y = years()
         d = days(y[1]) # Use remainder to calculate next variable
@@ -169,10 +169,14 @@ def getDuration(then, now, interval: str = 'default'):
         m = minutes(h[1])
         s = seconds(m[1])
         msg = []
-        if y[0] > 0: msg.append('{} years'.format(int(y[0])))
-        if d[0] > 0: msg.append('{} days'.format(int(d[0])))
-        if h[0] > 0: msg.append('{} hours'.format(int(h[0])))
-        if m[0] > 0: msg.append('{} minutes'.format(int(m[0])))
+        if y[0] > 0:
+            msg.append('{} years'.format(int(y[0])))
+        if d[0] > 0:
+            msg.append('{} days'.format(int(d[0])))
+        if h[0] > 0:
+            msg.append('{} hours'.format(int(h[0])))
+        if m[0] > 0:
+            msg.append('{} minutes'.format(int(m[0])))
         msg.append('{} seconds'.format(int(s[0])))
         return ', '.join(msg)
     return {'years': int(years()[0]),'days': int(days()[0]),'hours': int(hours()[0]),'minutes': int(minutes()[0]),'seconds': int(seconds()),'default': totalDuration()}[interval]
@@ -435,7 +439,7 @@ class PugTeams(Players):
     #########################################################################################
     @property
     def numCaptains(self):
-        return sum([self.red.captain != None, self.blue.captain != None])
+        return sum([self.red.captain is not None, self.blue.captain is not None])
 
     @property
     def captainsFull(self):
@@ -570,9 +574,11 @@ class GameServer:
         self.gameServerOnDemandReady = True
         self.gameServerRotation = []
 
-        # Setup details
+        # Setup details and live score
         self.redPassword = DEFAULT_RED_PASSWORD
         self.bluePassword = DEFAULT_BLUE_PASSWORD
+        self.redScore = 0
+        self.blueScore = 0
         self.spectatorPassword = DEFAULT_SPECTATOR_PASSWORD
         self.numSpectators = DEFAULT_NUM_SPECTATORS
 
@@ -629,7 +635,7 @@ class GameServer:
                 # Iterate through local cache of servers, and set the default if present
                 if 'serverlist' in info and len(info['serverlist']):
                     for server in info['serverlist']:
-                        if 'serverondemand' in server.keys() and server['serverondemand']==True:
+                        if 'serverondemand' in server.keys() and server['serverondemand'] is True:
                             ondemand = True
                         else:
                             ondemand = False
@@ -939,15 +945,29 @@ class GameServer:
         self.allServers.append((serverref, serverdesc, serverurl,serverondemand,serverlaststatus))
         return True
     
-    def useServer(self, index: int, autostart: bool = False):
+    def useServer(self, index: int, autostart: bool = False, byref: str = ''):
         """Sets the active server"""
+        serverchanged = False
         if index >= 0 and index < len(self.allServers):
+            # check if current server needs to be shut down first
+            if self.gameServerOnDemand:
+                self.controlOnDemandServer('stop', self.gameServerRef)
+            # update to new server
             self.gameServerRef = self.allServers[index][0]
             self.gameServerOnDemand = self.allServers[index][3]
             if autostart and self.gameServerOnDemand:
                 self.controlOnDemandServer('start')
             else:
                 self.updateServerStatus()
+            serverchanged = True
+        elif len(byref) > 0:
+            for s in self.allServers:
+                if s[0] == byref:
+                    self.gameServerRef = s[0]
+                    self.gameServerOnDemand = s[3]
+                    self.updateServerStatus()
+                    serverchanged = True
+        if serverchanged:
             self.saveServerConfig(self.configFile)
             self.utQueryData = {}
             return True
@@ -989,7 +1009,7 @@ class GameServer:
                 # firstly, determine if the primary server is online and responding, then drop the local list
                 serverDefaultPresent = False
                 for svc in info:
-                    if svc['serverDefault'] == True and (svc['cloudManaged'] == True or svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']):
+                    if svc['serverDefault'] is True and (svc['cloudManaged'] is True or svc['serverStatus']['Summary'] not in [None,'','N/A','N/AN/A']):
                         # If for whatever reason the default server isn't working, then stick to local list for now.
                         serverDefaultPresent = True
                         break
@@ -999,7 +1019,7 @@ class GameServer:
                     # Populate only those either online now, or that are "cloudManaged" on-demand servers
                     self.allServers = []
                     for sv in info:
-                        if sv['cloudManaged'] == True or sv['serverStatus']['Summary'] not in [None, '', 'N/A', 'N/AN/A']:
+                        if sv['cloudManaged'] is True or sv['serverStatus']['Summary'] not in [None, '', 'N/A', 'N/AN/A']:
                             self.updateServerReference(sv['serverRef'], sv['serverName'],'unreal://{0}:{1}'.format(sv['serverAddr'], sv['serverPort']), sv['cloudManaged'], sv['serverStatus']['Summary'])
 
                 # Write the server config:
@@ -1028,6 +1048,7 @@ class GameServer:
         log.debug('Running updateServerStatus')
         info = self.getServerStatus()
         log.debug('updateServerStatus - info fetched')
+        log.debug('serverStatus: {0}'.format(info['serverStatus']))
         if info:
             self.gameServerName = info['serverName']
             self.gameServerIP = info['serverAddr']
@@ -1036,7 +1057,10 @@ class GameServer:
             self.gameServerOnDemandReady = True
             self.gameServerState = info['serverStatus']['Summary']
             self.matchInProgress = False
-            if not self.endMatchPerformed and ignorematchStarted==False:
+            if self.gameServerState.startswith('OPEN - PUBLIC') is not True and self.gameServerState.startswith('LOCKED - PRIVATE') is not True:
+                self.redScore = info['serverStatus']['ScoreRed']
+                self.blueScore = info['serverStatus']['ScoreBlue']
+            if not self.endMatchPerformed and ignorematchStarted is False:
                 self.matchInProgress = info['matchStarted']
             self.lastSetupResult = info['setupResult']
             self.lastCheckJSON = info
@@ -1068,7 +1092,7 @@ class GameServer:
     def stopOnDemandServer(self, index: int):
         log.debug('Running stopOnDemandServer...')
         if index >= 0 and index < len(self.allServers):
-            if self.allServers[index][3]==True:
+            if self.allServers[index][3] is True:
                 self.controlOnDemandServer('stop',self.allServers[index][0])
                 log.debug('stopOnDemandServer - Control command issued.')
                 return True
@@ -1092,7 +1116,7 @@ class GameServer:
             self.gameServerOnDemandReady = True
 
         i = 0
-        while self.gameServerOnDemandReady==False:
+        while self.gameServerOnDemandReady is False:
             log.debug('Waiting for gameServerOnDemandReady...')
             if i < 5:
                 self.controlOnDemandServer('start')
@@ -1100,7 +1124,7 @@ class GameServer:
                 if self.parent.gameServer.updateServerStatus():
                     self.gameServerOnDemandReady=True
                 else:
-                    time.sleep(5);
+                    time.sleep(5)
             i+=1
             if i > 12:
                # Stop trying after a minute
@@ -1109,6 +1133,8 @@ class GameServer:
         if not self.gameServerOnDemandReady:
             return False
 
+        self.blueScore = 0
+        self.redScore = 0
         self.generatePasswords()
         headers = self.format_post_header_setup
         body = self.format_post_body_setup(numPlayers, maps, mode)
@@ -1121,7 +1147,7 @@ class GameServer:
             self.lastSetupJSON = info
             self.endMatchPerformed = False
 
-            # Get passwords from the server (doesn't currently seem to accept them)
+            # Get passwords from the server
             self.redPassword = info['setupConfig']['redPass']
             self.bluePassword = info['setupConfig']['bluePass']
             self.spectatorPassword = info['setupConfig']['specPass']
@@ -1136,6 +1162,14 @@ class GameServer:
         # returns server back to public
         if not self.updateServerStatus():
             return False
+        # Cache last scores from server status
+        log.debug('endMatch ({0}): redScore = {1} - blueScore = {2}'.format(self.endMatchPerformed, self.redScore, self.blueScore))
+        if self.endMatchPerformed is True:
+            if self.parent.storeLastPug('**Score:** Red {0} - {1} Blue'.format(self.redScore, self.blueScore)):
+                log.info('Pug reset; last scores appended successfully.')
+            else:
+                log.info('Pug reset; last scores did not append successfully.')
+        # Tear down match
         body = self.format_post_body_serverref()
         r = self.makePostRequest(self.postServer, self.format_post_header_endgame, body)
         if(r):
@@ -1195,7 +1229,7 @@ class GameServer:
             log.warn('Server not yet online.')
     
     @updateOnDemandServerState.after_loop
-    async def on_updateOnDemandServerState_cancel():
+    async def on_updateOnDemandServerState_cancel(self):
         # Assume after loop completion that the servers is ready, and fall back to pug setup to confirm
         self.gameServerOnDemandReady = True
 
@@ -1383,6 +1417,7 @@ class AssaultPug(PugTeams):
             result = False
             for x in range(0, 5):
                 result = self.gameServer.setupMatch(self.maxPlayers, self.maps.maps, self.mode)
+                log.debug('Setup attempt {0}/5: Result returned: {1}'.format(x+1,result))
                 if not result:
                     time.sleep(5)
                 else:
@@ -1391,7 +1426,7 @@ class AssaultPug(PugTeams):
                     return True
         return False
 
-    def storeLastPug(self):
+    def storeLastPug(self, appendstr: str = ''):
         if self.matchReady:
             fmt = []
             fmt.append('Last **{}** ({} ago)'.format(self.desc, '{}'))
@@ -1399,6 +1434,12 @@ class AssaultPug(PugTeams):
             fmt.append('Maps ({}):\n{}'.format(self.maps.maxMaps, self.maps.format_current_maplist))
             self.lastPugStr = '\n'.join(fmt)
             self.lastPugTimeStarted = datetime.now()
+            return True
+        elif len(appendstr):
+            fmt = []
+            fmt.append(self.lastPugStr)
+            fmt.append(appendstr)
+            self.lastPugStr = '\n'.join(fmt)
             return True
         return False
 
@@ -1525,7 +1566,7 @@ class PUG(commands.Cog):
 
     @tasks.loop(seconds=4.0)
     async def updateUTQueryReporter(self):
-        if self.pugInfo.gameServer.utQueryReporterActive and self.utReporterChannel != None:
+        if self.pugInfo.gameServer.utQueryReporterActive and self.utReporterChannel is not None:
             await self.queryServerConsole()
         return
 
@@ -1535,9 +1576,9 @@ class PUG(commands.Cog):
 
     @tasks.loop(seconds=60.0)
     async def updateUTQueryStats(self):
-        if self.utReporterChannel != None:
+        if self.utReporterChannel is not None:
             if self.pugInfo.gameServer.utQueryStatsActive:
-                if (not'laststats' in self.pugInfo.gameServer.utQueryData) or ('laststats' in self.pugInfo.gameServer.utQueryData and int(time.time())-int(self.pugInfo.gameServer.utQueryData['laststats']) > 55):
+                if ('laststats' not in self.pugInfo.gameServer.utQueryData) or ('laststats' in self.pugInfo.gameServer.utQueryData and int(time.time())-int(self.pugInfo.gameServer.utQueryData['laststats']) > 55):
                     await self.queryServerStats()
             elif self.pugInfo.gameServer.utQueryReporterActive and self.pugInfo.pugLocked:
                 # Skip one cycle, then re-enable stats
@@ -1689,7 +1730,7 @@ class PUG(commands.Cog):
         return self.activeChannel is not None and self.activeChannel == ctx.message.channel
     
     async def checkOnDemandServer(self, ctx):
-        if self.pugInfo.gameServer.gameServerState in ('N/A','N/AN/A') and self.pugInfo.gameServer.gameServerOnDemand == True:
+        if self.pugInfo.gameServer.gameServerState in ('N/A','N/AN/A') and self.pugInfo.gameServer.gameServerOnDemand is True:
             await ctx.send('Starting on-demand server: {0}...'.format(self.pugInfo.gameServer.gameServerName))
             info = self.pugInfo.gameServer.controlOnDemandServer('start')
             if (info):
@@ -1803,7 +1844,7 @@ class PUG(commands.Cog):
         consoleWatermark = self.pugInfo.gameServer.utQueryConsoleWatermark
         reportToChannel = self.utReporterChannel
         # Fetch console log
-        if self.pugInfo.gameServer.utQueryServer('consolelog') and reportToChannel != None:
+        if self.pugInfo.gameServer.utQueryServer('consolelog') and reportToChannel is not None:
             if 'code' in self.pugInfo.gameServer.utQueryData and self.pugInfo.gameServer.utQueryData['code'] == 200:
                 if 'consolelog' in self.pugInfo.gameServer.utQueryData:
                     bReportScoreLine = False
@@ -1831,7 +1872,7 @@ class PUG(commands.Cog):
                                     else:
                                         await reportToChannel.send('[{0}] {1}: {2}'.format(m['displaytime'],m['player'].strip(),m['message'].strip()))
                                 else:
-                                    if re.search('1\sminutes\suntil\sgame\sstart|conquered\sthe\sbase|defended\sthe\sbase',m['message'],re.IGNORECASE) != None:
+                                    if re.search('1\sminutes\suntil\sgame\sstart|conquered\sthe\sbase|defended\sthe\sbase',m['message'],re.IGNORECASE) is not None:
                                         bReportScoreLine = True
                                     if len(m['message'].strip()) > 0:
                                         await reportToChannel.send('[{0}] {1}'.format(m['displaytime'],m['message'].strip()))
@@ -1845,7 +1886,7 @@ class PUG(commands.Cog):
                                 stamp = 0
                             if stamp > self.pugInfo.gameServer.utQueryConsoleWatermark:
                                 await reportToChannel.send('{0}'.format(m[-(len(m)-18):]))
-                                if re.search('1\sminutes\suntil\sgame\sstart|conquered\sthe\sbase|defended\sthe\sbase',m,re.IGNORECASE) != None:
+                                if re.search('1\sminutes\suntil\sgame\sstart|conquered\sthe\sbase|defended\sthe\sbase',m,re.IGNORECASE) is not None:
                                     bReportScoreLine = True
                             if stamp > 0:
                                 consoleWatermark = stamp
@@ -1853,7 +1894,7 @@ class PUG(commands.Cog):
                                 consoleWatermark = self.pugInfo.gameServer.format_new_watermark
                     self.pugInfo.gameServer.utQueryConsoleWatermark = consoleWatermark
 
-                    if self.pugInfo.gameServer.utQueryStatsActive == False:
+                    if self.pugInfo.gameServer.utQueryStatsActive is False:
                         # Picking up a deferred stats request (from bReportScoreLine)
                         await self.queryServerStats()
                         # Reset the requirement for scoreline and re-enable the infrequent stats embed
@@ -1868,11 +1909,10 @@ class PUG(commands.Cog):
 
     async def queryServerStats(self, cacheonly: bool=False):
         embedInfo = discord.Embed(color=discord.Color.greyple(),title=self.pugInfo.gameServer.format_current_serveralias,description='Waiting for server info...')
-        reportToChannel = self.utReporterChannel
         # Send "info" to get basic server details and confirm online
         if self.pugInfo.gameServer.utQueryServer('info'):
             if 'code' in self.pugInfo.gameServer.utQueryData and self.pugInfo.gameServer.utQueryData['code'] == 200:
-                if cacheonly == False:
+                if cacheonly is False:
                     # Rate-limit reporter-channel stats cards to one a minute, even after an on-demand stats call
                     self.pugInfo.gameServer.utQueryData['laststats'] = int(time.time())
 
@@ -1897,7 +1937,7 @@ class PUG(commands.Cog):
                     summary['PlayerList255_data'] = ''
                     # Pick out generic UT info
                     if 'hostname' in queryData:
-                        if 'mutators' in queryData and re.search('Lag\sCompensator',str(queryData['mutators']),re.IGNORECASE) != None:
+                        if 'mutators' in queryData and re.search('Lag\sCompensator',str(queryData['mutators']),re.IGNORECASE) is not None:
                             summary['Title'] = summary['Hostname'] = queryData['hostname'].replace('| StdAS |','| lcAS |')
                         else:
                             summary['Title'] = summary['Hostname'] = queryData['hostname'].replace('| iAS | zp|','| zp-iAS |')
@@ -2030,15 +2070,15 @@ class PUG(commands.Cog):
                     if summary['PlayerList255_data'] != '':
                         embedInfo.add_field(name='Spectators',value=summary['PlayerList255'],inline=False)
 
-                    if cacheonly == False:
+                    if cacheonly is False:
                         await self.utReporterChannel.send(embed=embedInfo)
                 # Store the embed data for other functions to use
                 self.pugInfo.gameServer.utQueryEmbedCache = embedInfo.to_dict()
 
-        if (not 'code' in self.pugInfo.gameServer.utQueryData) or ('code' in self.pugInfo.gameServer.utQueryData and self.pugInfo.gameServer.utQueryData['code'] > 400):
+        if ('code' not in self.pugInfo.gameServer.utQueryData) or ('code' in self.pugInfo.gameServer.utQueryData and self.pugInfo.gameServer.utQueryData['code'] > 400):
             # Server offline
             embedInfo.color = discord.Color.darker_gray()
-            if self.pugInfo.gameServer.gameServerOnDemand == True:
+            if self.pugInfo.gameServer.gameServerOnDemand is True:
                 embedInfo.description = '```{0}```\nOn-demand server is currently offline. Start a !pug to use this server.'.format(self.pugInfo.gameServer.format_gameServerURL)
                 self.pugInfo.gameServer.utQueryEmbedCache = embedInfo.to_dict()
             else:
@@ -2046,7 +2086,7 @@ class PUG(commands.Cog):
         return True
 
     def cacheGuildEmojis(self):
-        if self.activeChannel != None:
+        if self.activeChannel is not None:
             for x in self.activeChannel.guild.emojis:
                 if x.animated:
                     self.customAnimatedEmojis[':{0}:'.format(x.name)] = x.id
@@ -2077,7 +2117,7 @@ class PUG(commands.Cog):
     @commands.check(isActiveChannel_Check)
     @commands.check(isPugInProgress_Warn)
     async def adminadd(self, ctx, *players: discord.Member):
-        "Adds a player to the pug. Admin only"
+        """Adds a player to the pug. Admin only"""
         failed = False
         for player in players:
             if not self.pugInfo.addPlayer(player):
@@ -2131,11 +2171,13 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Warn)
     async def adminstartserver(self, ctx, idx: int):
         """Starts up an on-demand server. Admin only"""
+        previousRef = self.pugInfo.gameServer.gameServerRef
         svindex = idx - 1 # offset as users see them 1-based index.
         if self.pugInfo.gameServer.useServer(svindex,True):
             await ctx.send('**{0}** is starting up (allow up to 60s).'.format(self.pugInfo.gameServer.gameServerName))
         else:
             await ctx.send('Selected server **{0}** could not be activated.'.format(idx))
+        self.pugInfo.gameServer.useServer(-1,True,previousRef) # return to active server
 
     @commands.command(aliases=['stopserver'])
     @commands.check(admin.hasManagerRole_Check)
@@ -2426,7 +2468,7 @@ class PUG(commands.Cog):
                           '^(?P<dns>(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)']:
                     if re.search(x,serveraddr):
                         servermatch = re.match(r'{0}'.format(x),serveraddr)
-                        if not 'ip' in servermatch.groupdict() and 'dns' in servermatch.groupdict():
+                        if 'ip' not in servermatch.groupdict() and 'dns' in servermatch.groupdict():
                             try:
                                 for ip in dns.resolver.resolve(servermatch['dns'], 'A'):
                                     serverinfo['ip'] = ip.address
@@ -2557,7 +2599,7 @@ class PUG(commands.Cog):
     @commands.guild_only()
     @commands.check(isActiveChannel_Check)
     async def retry(self, ctx):
-        if self.pugInfo.gameServer.matchInProgress == False or self.pugInfo.gameServer.gameServerOnDemand:
+        if self.pugInfo.gameServer.matchInProgress is False or self.pugInfo.gameServer.gameServerOnDemand:
             retryAllowed = True
         else:
             retryAllowed = False
@@ -2574,7 +2616,7 @@ class PUG(commands.Cog):
     @commands.check(isPugInProgress_Warn)
     async def resetcaptains(self, ctx):
         """Resets back to captain mode. Any players or maps picked will be reset."""
-        if self.pugInfo.numCaptains < 1 or self.pugLocked:
+        if self.pugInfo.numCaptains < 1 or self.pugInfo.pugLocked:
             return
 
         self.pugInfo.maps.resetMaps()
@@ -2718,7 +2760,7 @@ class PUG(commands.Cog):
     @commands.check(admin.hasManagerRole_Check)
     async def mutereporter(self, ctx):
         """Mutes the UT Server Reporter until the next active pug. Admin only"""
-        if (self.pugInfo.gameServer.utQueryReporterActive or self.pugInfo.gameServer.utQueryStatsActive) and self.utReporterChannel != None:
+        if (self.pugInfo.gameServer.utQueryReporterActive or self.pugInfo.gameServer.utQueryStatsActive) and self.utReporterChannel is not None:
             self.pugInfo.gameServer.utQueryReporterActive = False
             self.pugInfo.gameServer.utQueryStatsActive = False
             await ctx.send('Muted UT Reporter threads in the reporter channel')
@@ -2732,7 +2774,7 @@ class PUG(commands.Cog):
     async def startreporter(self, ctx):
         """Force-starts the UT Server Reporter, whether an active pug is running or not. Admin only"""
         if self.pugInfo.gameServer.utQueryStatsActive or self.pugInfo.gameServer.utQueryReporterActive:
-            if self.utReporterChannel == None:
+            if self.utReporterChannel is None:
                 await ctx.send('UT Reporter channel has not yet been configured, use **!setreporter** to configure the target channel.')
             elif self.utReporterChannel != ctx.message.channel:
                 await ctx.send('UT Reporter is already active in another channel.')
