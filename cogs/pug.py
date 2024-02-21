@@ -51,7 +51,8 @@ Mode = collections.namedtuple('Mode', 'maxPlayers friendlyFireScale mutators')
 MODE_CONFIG = {
     'stdAS': Mode(20, 0, None),
     'proAS': Mode(20, 100, None),
-    'lcAS': Mode(20, 0, 'LCWeapons_0025uta.LCMutator'),
+    'ASplus': Mode(20, 0, 'LeagueAS-SP.ASPlus'),
+    'proASplus': Mode(20, 100, 'LeagueAS-SP.ASPlus'),
     'iAS': Mode(20, 0, 'LeagueAS-SP.iAS'),
     'ZPiAS': Mode(20, 0, 'ZeroPingPlus103.ColorAccuGib')
 }
