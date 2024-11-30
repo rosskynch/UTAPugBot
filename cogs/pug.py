@@ -93,6 +93,34 @@ DEFAULT_MAP_LIST = [
     'AS-TheDungeon]l[AL',
 ]
 
+REGULAR_MAP_LIST = [
+    'AS-AsthenosphereSE',
+    'AS-AutoRip',
+    'AS-AutoRipSE_beta5',
+    'AS-Ballistic',
+    'AS-Bridge',
+    'AS-BridgePV_beta6c',
+    'AS-Desertstorm',
+    'AS-Desolate][',
+    'AS-Frigate',
+    'AS-GolgothaAL',
+    'AS-Golgotha][AL',
+    'AS-Guardia',
+    'AS-GuardiaAL',
+    'AS-HiSpeed',
+    'AS-Mazon',
+    'AS-OceanFloor',
+    'AS-OceanFloorAL',
+    'AS-Overlord',
+    'AS-RiverbedSE',
+    'AS-Riverbed]l[AL',
+    'AS-Riverbed]l[PE_beta3',
+    'AS-Rook',
+    'AS-Siege][',
+    'AS-Submarinebase][',
+    'AS-TheDungeon]l[AL',
+]
+
 # Server list:
 #  List of Tuples, first element is the API reference, second element is the placeholder
 #  Name / Description of the server, which is updated after a successful check.
@@ -267,6 +295,8 @@ class PugMaps:
         self.pickMode = pickMode
         self.availableMapsList = mapList
         self.maps = []
+        # List of non regular maps in a maplist
+        self.exoticMaps = 0
 
     def __contains__(self, map):
         return map in self.maps
@@ -383,7 +413,14 @@ class PugMaps:
             return False
         map = self.getMapFromAvailableList(index)
         if map and map not in self:
-            self.maps.append(map)
+            # Check if 7 maps and if map chosen is non-regular.
+            if (map not in REGULAR_MAP_LIST) and (self.maxMaps == 7) and (self.exoticMaps != 2):
+                self.exoticMaps += 1
+                self.maps.append(map)
+            elif (self.maxMaps == 7) and (self.exoticMaps == 2):
+                return False
+            else:
+                self.maps.append(map)
             return True
         return False
 
@@ -2728,7 +2765,7 @@ class PUG(commands.Cog):
             return
 
         if not self.pugInfo.pickMap(captain, mapIndex):
-            await ctx.send('Map already picked. Please, pick a different map.')
+            await ctx.send('Map already picked or maximum number of non-regular maps reached. Please, pick a different map.')
         
         msg = ['Maps chosen **({0} of {1})**:'.format(len(self.pugInfo.maps), self.pugInfo.maps.maxMaps)]
         msg.append(self.pugInfo.maps.format_current_maplist)
